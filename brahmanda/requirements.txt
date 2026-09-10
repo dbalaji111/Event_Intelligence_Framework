@@ -1,0 +1,32 @@
+# Brahmanda Framework - Requirements
+#
+# Version constraints below are not arbitrary - several encode real,
+# hard-won fixes from cross-platform debugging (Mac + Windows) during
+# development. See SETUP.md for the full story behind each one.
+
+# Core scientific stack
+numpy
+pandas
+scipy
+scikit-learn
+statsmodels
+
+# Retrieval
+faiss-cpu
+
+# NLP / embeddings
+# IMPORTANT: older sentence-transformers + newer PyTorch (2.2+) hits a
+# known bug ("Cannot copy out of meta tensor") when loading BERT-based
+# models. Pin to these minimums, not below, to avoid it.
+sentence-transformers>=6.0.0
+transformers>=5.0.0
+torch
+
+# API / dashboard backend
+fastapi
+uvicorn
+pydantic
+
+# Data I/O
+openpyxl
+tqdm

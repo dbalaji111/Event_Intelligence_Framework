@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+bayesian_env_rf/
+*.egg-info/
+
+# Large generated data (reproducible from scripts, not source)
+results_run/
+rolling_output/
+rolling_kde_output/
+rolling_output_v2/
+retrieval_output/
+retrieval_output_v3/
+retrieval_v2_output/
+diagnostic_2012/
+diagnostic_2012_basic/
+rolling_window_files/
+frl_v4/
+frl_rolling_v1/
+
+# HuggingFace / model cache
+hf_cache/
+.cache/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# OneDrive sync-conflict copies (e.g. "filename-Balaji's MacBook Pro.py")
+*-Balaji*.py
+*_OLD_backup.py
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+
+# Jupyter
+.ipynb_checkpoints/

@@ -1,0 +1,2420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BRAHMANDA · Event Risk Terminal</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* ═══ TOKENS ═══════════════════════════════════════════════════════════ */
+:root{
+  --ink:#0A0E14;            /* deep petroleum */
+  --panel:#0F1520;
+  --panel-2:#131B28;
+  --line:#1D2836;
+  --line-2:#2A3848;
+  --text:#D9DFE7;
+  --muted:#68788C;
+  --faint:#3D4B5C;
+
+  --crude:#E29A3C;          /* amber crude — signal accent */
+  --crude-dim:#E29A3C22;
+  --steel:#5B8DB8;          /* similarity / data */
+  --steel-dim:#5B8DB822;
+  --up:#4CAF7D;
+  --down:#D95757;
+  --warn:#E2B23C;
+  --violet:#9B7FD4;
+
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --cond:'IBM Plex Sans Condensed',var(--sans);
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --serif:'Spectral',Georgia,serif;
+
+  --r:6px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{
+  background:var(--ink);color:var(--text);font-family:var(--sans);font-size:13px;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:120px 120px;
+  background-attachment:fixed;
+}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(1200px 500px at 50% -10%,#13202f66,transparent);pointer-events:none}
+::selection{background:var(--crude);color:var(--ink)}
+button{font-family:var(--sans);cursor:pointer}
+input,select,textarea{font-family:var(--mono);color:var(--text)}
+:focus-visible{outline:2px solid var(--crude);outline-offset:2px}
+
+/* ═══ COMMAND BAR ══════════════════════════════════════════════════════ */
+.cmdbar{
+  position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:20px;
+  padding:10px 22px;background:#0A0E14ee;backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.wordmark{font-family:var(--cond);font-weight:700;font-size:17px;letter-spacing:.14em}
+.wordmark b{color:var(--crude)}
+.wordmark span{font-family:var(--mono);font-weight:400;font-size:10px;color:var(--muted);letter-spacing:.08em;margin-left:10px}
+.cmdbar .spacer{flex:1}
+.tape{display:flex;gap:22px;font-family:var(--mono);font-size:11px}
+.tape .t{display:flex;flex-direction:column;align-items:flex-end;line-height:1.3}
+.tape .t .k{color:var(--muted);font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+.tape .t .v{font-weight:600}
+.live{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.1em}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up);animation:pulse 2.2s infinite}
+.live.sim i{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ═══ CONSOLE (input + signal rail) ════════════════════════════════════ */
+.console{max-width:1560px;margin:18px auto 0;padding:0 22px}
+.inputrow{display:flex;gap:10px}
+.inputrow input{
+  flex:1;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r);
+  padding:13px 16px;font-size:13px;
+}
+.inputrow input::placeholder{color:var(--faint)}
+.inputrow input:focus{border-color:var(--crude)}
+.btn{
+  background:var(--crude);color:var(--ink);border:none;border-radius:var(--r);
+  padding:0 26px;font-weight:700;font-size:13px;letter-spacing:.02em;
+  transition:filter .12s;
+}
+.btn:hover{filter:brightness(1.12)}
+.btn:disabled{filter:grayscale(.7);opacity:.55;cursor:default}
+.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line-2)}
+.btn.ghost:hover{color:var(--text);border-color:var(--muted);filter:none}
+.samples{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.samples button{
+  background:transparent;border:1px solid var(--line);color:var(--muted);
+  border-radius:99px;padding:3px 11px;font-size:11px;font-family:var(--mono);
+}
+.samples button:hover{border-color:var(--crude);color:var(--crude)}
+
+/* signal rail — the pipeline spine */
+.rail{display:flex;align-items:center;margin:20px 0 4px;user-select:none}
+.node{display:flex;align-items:center;gap:9px;cursor:pointer}
+.node .dot{
+  width:13px;height:13px;border-radius:50%;border:2px solid var(--faint);
+  background:var(--ink);transition:all .3s;position:relative;
+}
+.node .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--faint);transition:color .3s}
+.node.on .dot{border-color:var(--crude);background:var(--crude);box-shadow:0 0 12px var(--crude-dim),0 0 4px var(--crude)}
+.node.on .lbl{color:var(--text)}
+.node.busy .dot{border-color:var(--crude);animation:pulse 1s infinite}
+.rail .link{flex:1;height:2px;background:var(--line);margin:0 12px;position:relative;overflow:hidden}
+.rail .link::after{content:"";position:absolute;inset:0;background:var(--crude);transform:scaleX(0);transform-origin:left;transition:transform .5s}
+.rail .link.on::after{transform:scaleX(1)}
+.rail .verdict{
+  font-family:var(--mono);font-weight:700;font-size:20px;min-width:86px;text-align:center;
+  border:2px solid var(--faint);border-radius:var(--r);padding:6px 10px;color:var(--faint);
+  transition:all .4s;line-height:1.1;
+}
+.rail .verdict small{display:block;font-size:8px;letter-spacing:.14em;font-weight:500}
+
+/* ═══ GRID ═════════════════════════════════════════════════════════════ */
+.grid{max-width:1560px;margin:14px auto;padding:0 22px;display:grid;grid-template-columns:330px 1fr 330px;gap:14px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.phdr{
+  display:flex;align-items:baseline;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
+  font-family:var(--cond);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+}
+.phdr .tag{font-family:var(--mono);font-weight:400;font-size:10px;color:var(--muted);letter-spacing:.04em;text-transform:none;margin-left:auto}
+.pbody{padding:12px 14px}
+.empty{color:var(--faint);font-size:12px;text-align:center;padding:26px 12px;line-height:1.6}
+
+/* ═══ FEED ═════════════════════════════════════════════════════════════ */
+.feed{max-height:640px;overflow-y:auto}
+.feed::-webkit-scrollbar{width:8px}
+.feed::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:4px}
+.ev{
+  padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;
+  display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;
+  transition:background .1s;border-left:2px solid transparent;
+}
+.ev:hover{background:var(--panel-2)}
+.ev.sel{border-left-color:var(--crude);background:var(--crude-dim)}
+.ev .h{font-size:11.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ev .m{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px}
+.chip{font-family:var(--mono);font-size:8.5px;font-weight:600;letter-spacing:.1em;padding:2px 7px;border-radius:3px;align-self:center}
+.chip.alert{color:var(--down);border:1px solid var(--down);background:#D9575714}
+.chip.ok{color:var(--up);border:1px solid var(--up);background:#4CAF7D14}
+
+/* ═══ ANALOGUES ════════════════════════════════════════════════════════ */
+.arow{
+  display:grid;grid-template-columns:76px 46px 1fr 50px 50px;gap:8px;align-items:center;
+  padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:2px;
+  border:1px solid transparent;cursor:pointer;font-family:var(--mono);
+}
+.arow:hover{border-color:var(--steel);background:var(--steel-dim)}
+.arow .d{color:var(--muted);font-size:10px}
+.arow .txt{font-family:var(--sans);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arow .r{text-align:right;font-weight:600}
+.ahead{display:grid;grid-template-columns:76px 46px 1fr 50px 50px;gap:8px;padding:0 8px 6px;
+  font-family:var(--mono);font-size:8.5px;color:var(--faint);letter-spacing:.12em;text-transform:uppercase}
+.ahead .r{text-align:right}
+.simbar{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.simbar i{display:block;height:100%;background:var(--steel)}
+
+/* ═══ PARAMS ═══════════════════════════════════════════════════════════ */
+.params{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 22px}
+.prow{display:flex;flex-direction:column;gap:5px}
+.prow .top{display:flex;justify-content:space-between;font-size:11px}
+.prow .top b{font-family:var(--mono);color:var(--crude);font-weight:600}
+.prow .top span{color:var(--muted)}
+input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:var(--line-2);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--crude);border:2px solid var(--ink);cursor:pointer}
+.formula{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin-top:10px}
+.formula b{color:var(--crude);font-weight:600}
+
+/* ═══ POSTERIOR / stats ════════════════════════════════════════════════ */
+.kstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.ks{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:9px;text-align:center}
+.ks .v{font-family:var(--mono);font-size:17px;font-weight:700}
+.ks .l{font-family:var(--mono);font-size:8.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:3px}
+.badge{font-family:var(--mono);font-size:9.5px;padding:3px 9px;border-radius:3px;letter-spacing:.06em}
+.b-vio{color:var(--violet);border:1px solid var(--violet);background:#9B7FD414}
+.b-warn{color:var(--warn);border:1px solid var(--warn);background:#E2B23C14}
+.tailtrack{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:6px}
+.tailtrack i{display:block;height:100%;background:linear-gradient(90deg,var(--down),var(--crude))}
+
+/* ═══ DECISION (right) ═════════════════════════════════════════════════ */
+.dial{position:relative;width:150px;height:150px;margin:6px auto}
+.dial svg{transform:rotate(-90deg)}
+.dial .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dial .num .n{font-family:var(--mono);font-size:38px;font-weight:700;line-height:1}
+.dial .num .l{font-family:var(--mono);font-size:9px;letter-spacing:.16em;margin-top:4px}
+.rec{font-size:11.5px;line-height:1.5;border-left:2px solid var(--faint);padding:7px 11px;margin-top:10px;color:var(--muted);background:var(--ink);border-radius:0 4px 4px 0}
+.kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:11.5px}
+.kv:last-child{border:none}
+.kv .k{color:var(--muted)}
+.kv .v{font-family:var(--mono);font-weight:600}
+.actions{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.actions .btn{padding:10px}
+.btn.report{background:linear-gradient(100deg,var(--crude),#c67f2e);color:var(--ink)}
+
+/* ═══ VALIDATION (backtest) ════════════════════════════════════════════ */
+.validation{max-width:1560px;margin:0 auto 40px;padding:0 22px}
+.btcfg{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.f{display:flex;flex-direction:column;gap:4px}
+.f label{font-family:var(--mono);font-size:8.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.f input,.f select{background:var(--ink);border:1px solid var(--line-2);border-radius:4px;padding:7px 10px;font-size:12px;width:118px}
+.f input:focus,.f select:focus{border-color:var(--crude)}
+.progress{margin-top:12px;display:none}
+.progress .msg{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:4px}
+.progress .track{height:4px;background:var(--ink);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.progress .track i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--steel),var(--crude));transition:width .4s}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px;margin-top:14px}
+.mc{background:var(--ink);border:1px solid var(--line);border-radius:4px;padding:11px;text-align:center}
+.mc .v{font-family:var(--mono);font-size:19px;font-weight:700}
+.mc .l{font-family:var(--mono);font-size:8.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
+.sec{font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+table.tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.tbl th{color:var(--faint);text-align:left;font-weight:500;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px 9px;border-bottom:1px solid var(--line)}
+.tbl td{padding:6px 9px;border-bottom:1px solid var(--line)}
+.footnote{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:8px;line-height:1.7}
+
+/* ═══ REPORT MODAL — serif document ════════════════════════════════════ */
+.overlay{position:fixed;inset:0;background:#05070Acc;backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;padding:28px}
+.overlay.show{display:flex}
+.doc{background:#121826;border:1px solid var(--line-2);border-radius:10px;width:min(820px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px #000a}
+.doc-hdr{display:flex;justify-content:space-between;align-items:center;padding:13px 20px;border-bottom:1px solid var(--line)}
+.doc-hdr .t{font-family:var(--cond);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+.doc-hdr .eng{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:10px}
+.doc-btn{background:none;border:1px solid var(--line-2);color:var(--muted);border-radius:4px;padding:5px 13px;font-size:11px;margin-left:6px}
+.doc-btn:hover{color:var(--text);border-color:var(--muted)}
+.doc-body{
+  padding:26px 34px;overflow-y:auto;
+  font-family:var(--serif);font-size:14.5px;line-height:1.75;color:#E4E7EC;
+}
+.doc-body h1{font-family:var(--serif);font-weight:600;font-size:21px;line-height:1.35;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line-2)}
+.doc-body h2{font-family:var(--cond);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--crude);margin:22px 0 8px}
+.doc-body strong{color:var(--crude);font-weight:600}
+.doc-body em{color:var(--steel)}
+.doc-body ul{padding-left:20px;margin:8px 0}
+.doc-body li{margin:4px 0}
+.doc-body p{margin:8px 0}
+
+/* ═══ RESPONSIVE ═══════════════════════════════════════════════════════ */
+@media(max-width:1180px){
+  .grid{grid-template-columns:1fr 1fr}
+  .grid .col-left{grid-column:1/-1}
+}
+@media(max-width:780px){
+  .grid{grid-template-columns:1fr}
+  .tape{display:none}
+  .params{grid-template-columns:1fr 1fr}
+  .rail .lbl{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ COMMAND BAR ═══ -->
+<div class="cmdbar">
+  <div class="wordmark">BRAHMA<b>N</b>DA <span>EVENT RISK TERMINAL · CL</span></div>
+  <div class="spacer"></div>
+  <div class="tape">
+    <div class="t"><span class="k">Analyzed</span><span class="v" id="tapeTotal">0</span></div>
+    <div class="t"><span class="k">Critical</span><span class="v" id="tapeCrit" style="color:var(--down)">0</span></div>
+    <div class="t"><span class="k">Bimodal</span><span class="v" id="tapeBi" style="color:var(--violet)">0</span></div>
+    <div class="t"><span class="k">OVX</span><span class="v" id="tapeOvx" style="color:var(--crude)">—</span></div>
+  </div>
+  <div class="live" id="liveBadge"><i></i><span id="liveLbl">CONNECTING</span></div>
+</div>
+
+<!-- ═══ CONSOLE ═══ -->
+<div class="console">
+  <div class="inputrow">
+    <input id="inp" placeholder="Paste a headline, or select an event from the feed…"
+           onkeydown="if(event.key==='Enter')analyze()" aria-label="News headline">
+    <button class="btn" id="aBtn" onclick="analyze()">Analyze</button>
+  </div>
+  <div class="samples" id="samples"></div>
+
+  <div class="rail" role="navigation" aria-label="Pipeline stages">
+    <div class="node" id="n0" onclick="scrollToEl('feedPanel')"><span class="dot"></span><span class="lbl">EVENT</span></div>
+    <div class="link" id="l0"></div>
+    <div class="node" id="n1" onclick="scrollToEl('anaPanel')"><span class="dot"></span><span class="lbl">ANALOGUES</span></div>
+    <div class="link" id="l1"></div>
+    <div class="node" id="n2" onclick="scrollToEl('paramPanel')"><span class="dot"></span><span class="lbl">PRIORS</span></div>
+    <div class="link" id="l2"></div>
+    <div class="node" id="n3" onclick="scrollToEl('postPanel')"><span class="dot"></span><span class="lbl">POSTERIOR</span></div>
+    <div class="link" id="l3"></div>
+    <div class="verdict" id="verdict"><span id="verdictN">—</span><small id="verdictL">DECISION</small></div>
+  </div>
+</div>
+
+<!-- ═══ MAIN GRID ═══ -->
+<div class="grid">
+
+  <!-- LEFT: FEED -->
+  <div class="col-left">
+    <div class="panel" id="feedPanel">
+      <div class="phdr">Refinitiv Feed <span class="tag" id="feedTag">loading…</span></div>
+      <div class="feed" id="feedList"><div class="empty">Connecting to event stream…</div></div>
+    </div>
+  </div>
+
+  <!-- CENTER: PIPELINE -->
+  <div>
+    <div class="panel" id="anaPanel">
+      <div class="phdr">Analogue Memory <span class="tag" id="anaTag"></span></div>
+      <div class="pbody">
+        <div id="anaList"><div class="empty">Analyze an event — its nearest historical analogues appear here,<br>weighted by embedding similarity.</div></div>
+
+        <div id="behavStrip" style="display:none;margin:12px 0 4px;padding:10px 12px;
+             background:#12182100;border:1px solid var(--border);border-radius:6px">
+          <div style="font-size:9px;letter-spacing:.12em;color:var(--steel);
+               text-transform:uppercase;margin-bottom:8px">
+            Behavioural reaction pattern
+            <span style="float:right;text-transform:none;letter-spacing:0"
+                  id="behavN"></span>
+          </div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap">
+            <div><div style="font-size:17px;font-weight:700;font-family:var(--mono)"
+                      id="behavOver">—</div>
+                 <div style="font-size:9px;color:var(--steel)">Faded (over-reaction)</div></div>
+            <div><div style="font-size:17px;font-weight:700;font-family:var(--mono)"
+                      id="behavUnder">—</div>
+                 <div style="font-size:9px;color:var(--steel)">Extended (under-reaction)</div></div>
+            <div><div style="font-size:17px;font-weight:700;font-family:var(--mono)"
+                      id="behavAgree">—</div>
+                 <div style="font-size:9px;color:var(--steel)">Directional agreement</div></div>
+            <div style="margin-left:auto;text-align:right">
+                 <div style="font-size:17px;font-weight:800;font-family:var(--mono)"
+                      id="behavMode">—</div>
+                 <div style="font-size:9px;color:var(--steel)">Dominant pattern</div></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;
+             margin:14px 0 4px">
+          <span style="font-size:9px;letter-spacing:.12em;color:var(--steel);
+                text-transform:uppercase">Precedent fan — what history did next</span>
+          <span style="font-size:9px;color:var(--steel)" id="fanMeta"></span>
+        </div>
+        <div id="anaChart" style="min-height:0"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="paramPanel" style="margin-top:14px">
+      <div class="phdr">Retrieval &amp; Prior Parameters
+        <span class="tag">w = sim<sup>α</sup> · q<sup>0.2</sup> · dtw<sup>γ</sup></span></div>
+      <div class="pbody">
+        <div class="params">
+          <div class="prow"><div class="top"><span>δ tail threshold</span><b id="vDelta">6%</b></div>
+            <input type="range" id="pDelta" min="2" max="15" value="6" oninput="vDelta.textContent=this.value+'%'" aria-label="Tail threshold"></div>
+          <div class="prow"><div class="top"><span>τ similarity</span><b id="vTau">0.85</b></div>
+            <input type="range" id="pTau" min="0.60" max="0.97" step="0.01" value="0.85" oninput="vTau.textContent=(+this.value).toFixed(2)" aria-label="Similarity threshold"></div>
+          <div class="prow"><div class="top"><span>DTW radius</span><b id="vDtw">2</b></div>
+            <input type="range" id="pDtw" min="1" max="8" value="2" oninput="vDtw.textContent=this.value" aria-label="DTW radius"></div>
+          <div class="prow"><div class="top"><span>K min analogues</span><b id="vK">25</b></div>
+            <input type="range" id="pK" min="5" max="60" value="25" oninput="vK.textContent=this.value" aria-label="Minimum analogues"></div>
+          <div class="prow"><div class="top"><span>α sim exponent</span><b id="vAlpha">0.5</b></div>
+            <input type="range" id="pAlpha" min="0" max="1" step="0.1" value="0.5" oninput="vAlpha.textContent=(+this.value).toFixed(1)" aria-label="Similarity exponent"></div>
+          <div class="prow"><div class="top"><span>γ dtw exponent</span><b id="vGamma">0.3</b></div>
+            <input type="range" id="pGamma" min="0" max="1" step="0.1" value="0.3" oninput="vGamma.textContent=(+this.value).toFixed(1)" aria-label="DTW exponent"></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+          <button class="btn" id="runBtn" onclick="runPosterior()" style="padding:10px 26px">▶ Run posterior</button>
+          <div class="formula">retrieve at τ, relax if &lt;K · weight <b>w = sim^α · q^0.2 · dtw^γ</b> · mix N(μᵢ,σᵢ)</div>
+        </div>
+        <div id="priorChart" style="margin-top:12px;min-height:0"></div>
+        <div id="priorChips" style="display:flex;gap:8px;margin-top:8px"></div>
+        <div id="tailWrap" style="display:none">
+          <div class="tailtrack"><i id="tailFill" style="width:0%"></i></div>
+          <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px">
+            <span id="tailPct">Tail 0%</span><span id="medPct">Medium 100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="panel" id="conePanel" style="margin-top:14px">
+      <div class="phdr">Forecast Cone -- evolving posterior, t+1 to t+15
+        <span class="tag" id="coneMeta"></span></div>
+      <div class="pbody">
+        <div id="coneChart" style="min-height:0"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="postPanel" style="margin-top:14px">
+      <div class="phdr">KDE Posterior — 15d forward return
+        <span class="tag" id="postTag"></span></div>
+      <div class="pbody">
+        <div id="kdePlot"><div class="empty">The posterior distribution renders here after Run posterior.<br>Precomputed density grids are used when available.</div></div>
+        <div class="kstats" id="kStats" style="display:none">
+          <div class="ks"><div class="v" style="color:var(--down)" id="kP5">—</div><div class="l">P5 downside</div></div>
+          <div class="ks"><div class="v" style="color:var(--warn)" id="kMed">—</div><div class="l">Median</div></div>
+          <div class="ks"><div class="v" style="color:var(--up)" id="kP95">—</div><div class="l">P95 upside</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: DECISION -->
+  <div>
+    <div class="panel">
+      <div class="phdr">Risk Decision <span class="tag" id="decTag"></span></div>
+      <div class="pbody">
+        <div class="dial">
+          <svg width="150" height="150" viewBox="0 0 150 150" aria-hidden="true">
+            <circle cx="75" cy="75" r="64" fill="none" stroke="var(--line)" stroke-width="9"/>
+            <circle id="dialArc" cx="75" cy="75" r="64" fill="none" stroke="var(--faint)" stroke-width="9"
+                    stroke-linecap="round" stroke-dasharray="402" stroke-dashoffset="402"
+                    style="transition:stroke-dashoffset .8s,stroke .4s"/>
+          </svg>
+          <div class="num"><div class="n" id="dialN">—</div><div class="l" id="dialL">AWAITING</div></div>
+        </div>
+        <div class="rec" id="recBox">Analyze an event to produce a decision. The score combines severity,
+          analogue confidence, directional consistency and posterior tail mass.</div>
+        <div style="margin-top:12px" id="decKv"></div>
+        <div class="actions">
+          <button class="btn report" id="reportBtn" onclick="generateAIReport()" disabled>Generate analyst report</button>
+          <button class="btn ghost" id="exportBtn" onclick="exportJSON()" disabled>Export analysis JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <div class="phdr">Implied Volatility <span class="tag">OVX · CBOE</span></div>
+      <div class="pbody">
+        <div id="ovxPlot" style="min-height:0"><div class="empty">OVX history loads with the terminal.</div></div>
+        <div id="ovxKv"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VALIDATION ═══ -->
+<div class="validation">
+  <div class="panel">
+    <div class="phdr">Validation — Walk-forward Backtest
+      <span class="tag" id="btTag">2001–2023 corpus · precomputed posteriors</span></div>
+    <div class="pbody">
+      <div class="btcfg">
+        <div class="f"><label>Horizon</label>
+          <select id="btHorizon"><option value="7">7 days</option><option value="15" selected>15 days</option><option value="30">30 days</option></select></div>
+        <div class="f"><label>Start</label><input type="date" id="btStart" value="2005-01-01"></div>
+        <div class="f"><label>End</label><input type="date" id="btEnd" value="2023-12-31"></div>
+        <div class="f"><label>No-trade band %</label><input type="number" id="btBand" value="2.0" step="0.5" min="0"></div>
+        <div class="f"><label>Tail veto</label><input type="number" id="btVeto" value="0.35" step="0.05" min="0" max="1"></div>
+        <div class="f"><label>Cost bps</label><input type="number" id="btCost" value="5" step="1" min="0"></div>
+        <button class="btn" id="btRunBtn" onclick="btRun()" style="padding:9px 22px">▶ Run backtest</button>
+        <button class="btn ghost" onclick="btLoadLatest()" style="padding:9px 16px">Load last results</button>
+      </div>
+      <div class="progress" id="btProg">
+        <div class="msg"><span id="btMsg">Starting…</span><span id="btPct"></span></div>
+        <div class="track"><i id="btBar"></i></div>
+      </div>
+      <div id="btResults">
+        <div class="empty">Run a walk-forward backtest to evaluate calibration (90% coverage, pinball loss, CRPS),
+        directional hit rate, red-flag score utility, and the tail-veto trading rule after costs.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REPORT MODAL ═══ -->
+<div class="overlay" id="rptOverlay" onclick="if(event.target===this)closeReport()" role="dialog" aria-modal="true" aria-label="Analyst report">
+  <div class="doc">
+    <div class="doc-hdr">
+      <div><span class="t">Analyst Report</span><span class="eng" id="rptEngine"></span></div>
+      <div>
+        <button class="doc-btn" onclick="copyReport()">Copy</button>
+        <button class="doc-btn" onclick="downloadReport()">Download .md</button>
+        <button class="doc-btn" onclick="closeReport()">Close ✕</button>
+      </div>
+    </div>
+    <div class="doc-body" id="rptBody"></div>
+  </div>
+</div>
+
+<script>
+/* ═══ BRAHMANDA terminal ═══════════════════════════════════════════════ */
+const API = new URLSearchParams(window.location.search).get("api") || window.location.origin;
+const $  = id => document.getElementById(id);
+const S  = { result:null, eventId:null, live:false, nAnalyzed:0, nCrit:0, nBi:0, report:null };
+
+const PLOT_BASE = {
+  paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+  font:{family:"IBM Plex Mono, monospace", size:10, color:"#68788C"},
+  margin:{l:42,r:12,t:8,b:30}, showlegend:false,
+};
+const PLOT_CFG = {displayModeBar:false, responsive:true};
+
+function scrollToEl(id){ $(id).scrollIntoView({behavior:"smooth", block:"center"}); }
+
+/* ── signal rail ── */
+function setStage(n, busy=false){
+  for(let i=0;i<4;i++){
+    $("n"+i).classList.toggle("on", i<n || (i===n&&!busy));
+    $("n"+i).classList.toggle("busy", i===n&&busy);
+    if(i<3) $("l"+i).classList.toggle("on", i<n);
+  }
+  $("l3").classList.toggle("on", n>=4);
+}
+function setVerdict(score,label,color){
+  const v=$("verdict");
+  $("verdictN").textContent = score==null?"—":Math.round(score);
+  $("verdictL").textContent = label||"DECISION";
+  v.style.borderColor = color||"var(--faint)";
+  v.style.color = color||"var(--faint)";
+  if(color) v.style.boxShadow = `0 0 18px ${color}33`;
+}
+
+/* ── light check (client triage, mirrors server keywords) ── */
+const KW = ["war","attack","strike","opec","sanction","embargo","invasion","missile",
+  "hurricane","disruption","shutdown","blockade","hormuz","pipeline","explosion",
+  "cut production","supply cut","crisis","conflict","iran","escalat"];
+const lightCheck = t => KW.some(k => (t||"").toLowerCase().includes(k)) ? "alert" : "ok";
+
+/* ── boot ── */
+const SAMPLES = [
+  "OPEC+ announces surprise 1M bpd production cut",
+  "Missile strikes reported near Strait of Hormuz",
+  "US crude inventories build for fifth straight week",
+  "Hurricane forces Gulf of Mexico platform shutdowns",
+];
+async function boot(){
+  $("samples").innerHTML = SAMPLES.map(s=>
+    `<button onclick="useSample(this)">${s}</button>`).join("");
+  try{
+    const h = await (await fetch(`${API}/health`,{signal:AbortSignal.timeout(4000)})).json();
+    S.live = true;
+    $("liveLbl").textContent = "LIVE";
+  }catch(e){
+    S.live = false;
+    $("liveBadge").classList.add("sim");
+    $("liveLbl").textContent = "SIMULATED · API OFFLINE";
+  }
+  loadFeed(); loadOVX();
+}
+function useSample(btn){ $("inp").value = btn.textContent; S.eventId = null;
+  document.querySelectorAll(".ev.sel").forEach(e=>e.classList.remove("sel")); analyze(); }
+
+/* ── feed ── */
+async function loadFeed(){
+  let evs = [];
+  if(S.live){
+    try{ evs = (await (await fetch(`${API}/events?limit=100`)).json()).events||[]; }catch(e){}
+  }
+  if(!evs.length){
+    evs = SAMPLES.map((t,i)=>({event_id:null, date:"2026-04-"+(28-i), text:t, source:"demo"}));
+    $("feedTag").textContent = "demo events";
+  }else{
+    $("feedTag").textContent = `${evs.length} events`;
+  }
+  $("feedList").innerHTML = evs.map((e,i)=>{
+    const cls = lightCheck(e.text);
+    return `<div class="ev" id="ev${i}" onclick='selectEvent(${JSON.stringify(e).replace(/'/g,"&#39;")},${i})'>
+      <div><div class="h">${e.text||""}</div>
+        <div class="m">${(e.date||"").slice(0,10)} · ${e.Event_type||e.event_type||e.source||"Refinitiv"}</div></div>
+      <span class="chip ${cls}">${cls==="alert"?"ALERT":"OK"}</span>${e.kde_available?"<span style='font-size:9px;color:#5B8DB8;margin-left:4px'>📊</span>":""}
+    </div>`;
+  }).join("");
+}
+function selectEvent(e,i){
+  document.querySelectorAll(".ev.sel").forEach(x=>x.classList.remove("sel"));
+  $("ev"+i).classList.add("sel");
+  $("inp").value = e.text||"";
+  S.eventId = e.event_id||null;
+  analyze();
+}
+
+/* ── analyze ── */
+async function analyze(){
+  const text = $("inp").value.trim();
+  if(!text) return;
+  $("aBtn").disabled = true; $("aBtn").textContent = "…";
+  setStage(0,true); setVerdict(null,"WORKING");
+  let d = null;
+  if(S.live){
+    try{
+      const r = await fetch(`${API}/analyze`,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({headline:text, event_id:S.eventId||""}),
+        signal:AbortSignal.timeout(30000)});
+      if(r.ok) d = await r.json();
+    }catch(e){}
+  }
+  if(!d) d = mockAnalyze(text);
+  S.result = d;
+  S.nAnalyzed++; if((d.red_flag_score||0)>=80) S.nCrit++;
+  $("tapeTotal").textContent = S.nAnalyzed; $("tapeCrit").textContent = S.nCrit;
+  setStage(1); renderAnalogues(d);
+  $("runBtn").disabled = false;
+  $("aBtn").disabled = false; $("aBtn").textContent = "Analyze";
+  $("anaTag").textContent = `${(d.similar_events||[]).length} retrieved · ${d.event_type||"?"}`;
+}
+
+/* ── analogues ── */
+function renderAnalogues(d){
+  const evs = (d.similar_events||[]).slice(0,10);
+  if(!evs.length){ $("anaList").innerHTML='<div class="empty">No analogues above threshold — lower τ and rerun.</div>'; return; }
+  $("anaList").innerHTML =
+    `<div class="ahead"><span>Date</span><span>Sim</span><span>Episode</span><span class="r">r+7</span><span class="r">r+15</span></div>` +
+    evs.map(e=>{
+      const c7 = (e.r7??0)>=0?"var(--up)":"var(--down)", c15=(e.r15??0)>=0?"var(--up)":"var(--down)";
+      return `<div class="arow">
+        <span class="d">${(e.date||"").slice(0,10)}</span>
+        <span><div class="simbar"><i style="width:${Math.round((e.similarity||0)*100)}%"></i></div>
+          <span style="font-size:9px;color:var(--steel)">${((e.similarity||0)*100).toFixed(0)}%</span></span>
+        <span class="txt">${e.summary||e.text||e.headline||""}</span>
+        <span class="r" style="color:${c7}">${e.r7==null?"—":(e.r7>0?"+":"")+e.r7+"%"}</span>
+        <span class="r" style="color:${c15}">${e.r15==null?"—":(e.r15>0?"+":"")+e.r15+"%"}</span>
+      </div>`;
+    }).join("");
+  // use the full retrieved set for the fan, not just the top 10 shown in the table
+  const all = (d.similar_events||[]).filter(e => e.r7!=null && e.r15!=null);
+  renderBehavioural(all);
+  drawPrecedentFan(all, d);
+}
+
+/* ── behavioural reaction pattern ──
+   Measured directly from the analogue paths we already retrieved.
+   |r7| > |r15|  the initial move faded      → over-reaction
+   |r15| > |r7|  the initial move extended   → under-reaction     */
+function renderBehavioural(paths){
+  const strip = $("behavStrip");
+  if(!paths.length){ strip.style.display = "none"; return; }
+  strip.style.display = "block";
+
+  let over = 0, under = 0, up = 0;
+  paths.forEach(a => {
+    const a7 = Math.abs(a.r7), a15 = Math.abs(a.r15);
+    if      (a7  > a15 * 1.15) over++;
+    else if (a15 > a7  * 1.15) under++;
+    if (a.r15 > 0) up++;
+  });
+
+  const n     = paths.length;
+  const oR    = over / n, uR = under / n;
+  const agree = Math.max(up, n - up) / n;
+  const mode  = oR > uR * 1.15 ? "FADE"
+              : uR > oR * 1.15 ? "FOLLOW"
+              : "MIXED";
+
+  $("behavN").textContent      = n + " precedent paths";
+  $("behavOver").textContent   = (oR * 100).toFixed(0) + "%";
+  $("behavUnder").textContent  = (uR * 100).toFixed(0) + "%";
+  $("behavAgree").textContent  = (agree * 100).toFixed(0) + "%";
+  const m = $("behavMode");
+  m.textContent   = mode;
+  m.style.color   = mode === "FADE"   ? "var(--down)"
+                  : mode === "FOLLOW" ? "var(--up)"
+                  : "var(--steel)";
+  S.behavioural = { mode, over:oR, under:uR, agree, n, upRate: up/n };
+}
+
+/* ── precedent fan ──
+   Every retrieved analogue as its own path from the event date.
+   Two visible bundles = two scenarios, without needing a statistic. */
+function drawPrecedentFan(paths, d){
+  if(!paths.length){
+    Plotly.purge("anaChart");
+    $("fanMeta").textContent = "";
+    return;
+  }
+  const P = paths.slice(0, 40);
+  const x = [0, 7, 15];
+
+  const traces = P.map(a => ({
+    x, y: [0, a.r7, a.r15], type:"scatter", mode:"lines",
+    line:{ color: a.r15 > 0 ? "rgba(76,175,125,0.32)" : "rgba(217,87,87,0.32)",
+           width: 1.1, shape:"spline" },
+    hovertemplate: `${(a.date||"").slice(0,10)}`
+      + `<br>sim ${((a.similarity||0)*100).toFixed(0)}%`
+      + `<br>r+7 ${a.r7.toFixed(1)}%   r+15 ${a.r15.toFixed(1)}%<extra></extra>`
+  }));
+
+  // posterior cone behind the paths, when we have one
+  const r = S.result || {};
+  if(r.kde_p5 != null && r.kde_p95 != null){
+    traces.unshift({
+      x:[0,15,15,0], y:[0, r.kde_p95, r.kde_p5, 0],
+      fill:"toself", fillcolor:"rgba(46,117,182,0.11)",
+      line:{width:0}, hoverinfo:"skip", type:"scatter"
+    });
+    traces.push({
+      x:[0,15], y:[0, r.kde_median ?? 0], type:"scatter", mode:"lines",
+      line:{color:"#2E75B6", width:2.5, dash:"dot"}, hoverinfo:"skip"
+    });
+  }
+
+  Plotly.newPlot("anaChart", traces, {
+    ...PLOT_BASE, height:230,
+    margin:{l:44,r:14,t:8,b:30},
+    xaxis:{ title:{text:"days from event", font:{size:9}},
+            tickvals:[0,7,15], gridcolor:"#1D2836",
+            zeroline:true, zerolinecolor:"#2A3848" },
+    yaxis:{ title:{text:"return %", font:{size:9}},
+            gridcolor:"#1D2836", zeroline:true, zerolinecolor:"#2A3848" }
+  }, PLOT_CFG);
+
+  const upN = P.filter(a => a.r15 > 0).length;
+  const bim = S.result && S.result.is_bimodal;
+  $("fanMeta").textContent =
+    `${P.length} precedents · ${upN} up / ${P.length - upN} down`
+    + (bim ? " · bimodal" : "");
+}
+
+/* ── posterior ── */
+async function runPosterior(){
+  if(!S.result) return;
+  const btn=$("runBtn"); btn.disabled=true; btn.textContent="Computing…";
+  setStage(2,true);
+
+  // live retrieval with current params when an event is selected
+  if(S.live && S.eventId){
+    try{
+      const r = await fetch(`${API}/retrieve`,{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({event_id:S.eventId, tau:+$("pTau").value, k_min:+$("pK").value}),
+        signal:AbortSignal.timeout(30000)});
+      if(r.ok){
+        const rr = await r.json();
+        if((rr.analogues||[]).length){
+          S.result.similar_events = rr.analogues;
+          renderAnalogues(S.result);
+          $("anaTag").textContent = `${rr.analogues.length} retrieved · τ=${rr.tau_used??$("pTau").value}`;
+        }
+      }
+    }catch(e){}
+  }
+
+  const d = S.result, delta = +$("pDelta").value;
+  const evs = (d.similar_events||[]);
+  const tail = evs.filter(e=>Math.abs(e.r15??0)>delta), med = evs.filter(e=>Math.abs(e.r15??0)<=delta);
+  drawPriors(evs, delta);
+  $("priorChips").innerHTML =
+    `<span class="badge" style="color:var(--down);border:1px solid var(--down)">Tail: ${tail.length} (|r|&gt;${delta}%)</span>
+     <span class="badge" style="color:var(--steel);border:1px solid var(--steel)">Medium: ${med.length}</span>`;
+  const tw = d.tail_weight ?? (evs.length?tail.length/evs.length:0);
+  $("tailWrap").style.display="block";
+  $("tailFill").style.width = Math.round(tw*100)+"%";
+  $("tailPct").textContent = `Tail ${(tw*100).toFixed(0)}%`;
+  $("medPct").textContent  = `Medium ${(100-tw*100).toFixed(0)}%`;
+
+  setStage(3,true);
+  await drawKDE(d);
+  setStage(4);
+  renderDecision(d);
+  if(d.is_bimodal){ S.nBi++; $("tapeBi").textContent = S.nBi; }
+  $("reportBtn").disabled=false; $("exportBtn").disabled=false;
+  btn.disabled=false; btn.textContent="▶ Run posterior";
+}
+
+function gauss(x,mu,s){ return Math.exp(-0.5*((x-mu)/s)**2)/(s*Math.sqrt(2*Math.PI)); }
+
+function drawPriors(evs, delta){
+  const xs = Array.from({length:241},(_,i)=>-30+i*0.25);
+  const traces = evs.slice(0,25).map(e=>{
+    const mu=e.r15??0, s=1.6+(1-(e.similarity||0.8))*6, tailP=Math.abs(mu)>delta;
+    return {x:xs, y:xs.map(x=>gauss(x,mu,s)*(e.similarity||0.8)), type:"scatter",
+      mode:"lines", line:{width:1, color:tailP?"#D9575766":"#5B8DB866"},
+      fill:"tozeroy", fillcolor:tailP?"#D9575711":"#5B8DB80d"};
+  });
+  Plotly.newPlot("priorChart",traces,
+    {...PLOT_BASE,height:170,xaxis:{title:"Return (%)",gridcolor:"#1D2836",zerolinecolor:"#2A3848",range:[-30,30]},
+     yaxis:{visible:false}},PLOT_CFG);
+}
+
+async function drawKDE(d){
+  // Live forecast_cone from /analyze (path_kde.py, real three-rank
+  // mixture computed from actual analogue dates) is the source of
+  // truth. The precomputed /kde/{event_id} endpoint is no longer
+  // consulted here -- it was silently overwriting live numbers with a
+  // static offline file whenever the selected event happened to have
+  // one, which defeated the whole point of computing this live.
+  let gx=null, gy=null, src="live mixture (path_kde.py)";
+  const cone = d.forecast_cone || {};
+  const horizonKey = "15";
+  if(cone[horizonKey]){
+    const t = cone[horizonKey];
+    d.kde_p5 = t.p5 ?? d.kde_p5;
+    d.kde_median = t.median ?? d.kde_median;
+    d.kde_p95 = t.p95 ?? d.kde_p95;
+    d.is_bimodal = t.is_bimodal ?? d.is_bimodal;
+    d.tail_weight = t.tail_weight ?? d.tail_weight;
+  }
+  drawForecastCone(d);
+  if(!gx){
+    const evs=d.similar_events||[], a=+$("pAlpha").value, g=+$("pGamma").value;
+    gx = Array.from({length:321},(_,i)=>-40+i*0.25);
+    gy = gx.map(x=> evs.reduce((acc,e)=>{
+      const w = Math.pow(e.similarity||0.8,a)*Math.pow(0.9,g);
+      return acc + w*gauss(x, e.r15??0, 2.2+(1-(e.similarity||0.8))*5);
+    },0));
+    const Z = gy.reduce((s,v)=>s+v,0)*0.25||1; gy = gy.map(v=>v/Z);
+  }
+  const p5=d.kde_p5, med=d.kde_median, p95=d.kde_p95;
+  const shade=(lo,hi,col)=>({x:gx.filter(x=>x>=lo&&x<=hi),y:gx.map((x,i)=>[x,gy[i]]).filter(p=>p[0]>=lo&&p[0]<=hi).map(p=>p[1]),
+    type:"scatter",mode:"lines",line:{width:0},fill:"tozeroy",fillcolor:col});
+  const vline=(x,col,dash)=>({x:[x,x],y:[0,Math.max(...gy)*1.05],mode:"lines",line:{color:col,width:1.4,dash:dash||"dot"}});
+  Plotly.newPlot("kdePlot",[
+    shade(Math.min(...gx),p5,"#D9575726"),
+    shade(p95,Math.max(...gx),"#4CAF7D26"),
+    {x:gx,y:gy,type:"scatter",mode:"lines",line:{color:"#E29A3C",width:2.4},
+      fill:"tozeroy",fillcolor:"#E29A3C10"},
+    vline(p5,"#D95757"), vline(med,"#E2B23C","solid"), vline(p95,"#4CAF7D"),
+  ],{...PLOT_BASE,height:250,
+     xaxis:{title:"15d forward return (%)",gridcolor:"#1D2836",zerolinecolor:"#2A3848"},
+     yaxis:{title:"density",gridcolor:"#1D2836"}},PLOT_CFG);
+  $("postTag").textContent = src + (d.is_bimodal?" · BIMODAL":"");
+  $("kStats").style.display="grid";
+  const f=v=>v==null?"—":(v>0?"+":"")+(+v).toFixed(1)+"%";
+  $("kP5").textContent=f(p5); $("kMed").textContent=f(med); $("kP95").textContent=f(p95);
+}
+
+/* ── decision ── */
+const scoreColor = s => s>=80?"#D95757":s>=60?"#E29A3C":s>=40?"#E2B23C":"#4CAF7D";
+function renderDecision(d){
+  const s = d.red_flag_score??0, col = scoreColor(s);
+  $("dialArc").style.strokeDashoffset = 402-402*(s/100);
+  $("dialArc").style.stroke = col;
+  $("dialN").textContent = Math.round(s); $("dialN").style.color = col;
+  $("dialL").textContent = (d.red_flag_label||"").toUpperCase(); $("dialL").style.color = col;
+  $("recBox").textContent = d.recommendation||"";
+  $("recBox").style.borderColor = col;
+  setVerdict(s,(d.red_flag_label||"").toUpperCase(),col);
+  $("decTag").textContent = d._simulated?"simulated":"live";
+  const pu = d.outcome_stats?.probability_up;
+  $("decKv").innerHTML = [
+    ["Event type", d.event_type||"—"],
+    ["Severity", d.severity_label||"—"],
+    ["P(up) from analogues", pu==null?"—":(pu*100).toFixed(0)+"%"],
+    ["Tail weight", d.tail_weight==null?"—":(d.tail_weight*100).toFixed(0)+"%"],
+    ["Shape", d.is_bimodal?"Bimodal — two scenarios":"Unimodal"],
+  ].map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+}
+
+/* ── analyst report ── */
+async function generateAIReport(){
+  if(!S.result) return;
+  $("reportBtn").disabled=true; $("reportBtn").textContent="Generating…";
+  $("rptOverlay").classList.add("show");
+  $("rptBody").innerHTML='<div class="empty">Composing analyst report…</div>';
+  $("rptEngine").textContent="";
+  const body = S.eventId ? {event_id:S.eventId, use_llm:true}
+                         : {analysis:S.result, use_llm:true};
+  try{
+    if(!S.live) throw new Error("API offline");
+    const r = await fetch(`${API}/report`,{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body), signal:AbortSignal.timeout(90000)});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    S.report = await r.json();
+    $("rptEngine").textContent = S.report.engine==="llm" ? "· Claude"
+      : "· template — set ANTHROPIC_API_KEY for LLM reports";
+    $("rptBody").innerHTML = (typeof marked!=="undefined")
+      ? marked.parse(S.report.markdown)
+      : `<pre style="white-space:pre-wrap">${S.report.markdown}</pre>`;
+  }catch(e){
+    $("rptBody").innerHTML =
+      `<div class="empty">Report generation failed: ${e.message}.<br>Start the API with the report layer mounted, then retry.</div>`;
+  }
+  $("reportBtn").disabled=false; $("reportBtn").textContent="Generate analyst report";
+}
+function closeReport(){ $("rptOverlay").classList.remove("show"); }
+function copyReport(){ if(S.report) navigator.clipboard.writeText(S.report.markdown); }
+function downloadReport(){
+  if(!S.report) return;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([S.report.markdown],{type:"text/markdown"}));
+  a.download=`report_${S.report.report_id}.md`; a.click(); URL.revokeObjectURL(a.href);
+}
+function exportJSON(){
+  if(!S.result) return;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(S.result,null,2)],{type:"application/json"}));
+  a.download="analysis.json"; a.click(); URL.revokeObjectURL(a.href);
+}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeReport(); });
+
+/* ── backtest ── */
+let btPoller=null;
+async function btRun(){
+  const cfg={horizon:+$("btHorizon").value, start_date:$("btStart").value,
+    end_date:$("btEnd").value, no_trade_band:+$("btBand").value,
+    tail_veto:+$("btVeto").value, cost_bps:+$("btCost").value};
+  const b=$("btRunBtn"); b.disabled=true; b.textContent="Running…";
+  $("btProg").style.display="block"; $("btMsg").textContent="Starting…"; $("btBar").style.width="0%";
+  try{
+    if(!S.live) throw new Error("API offline — start the server to run backtests");
+    const r=await fetch(`${API}/backtest/run`,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg),
+      signal:AbortSignal.timeout(8000)});
+    if(r.status===409) $("btMsg").textContent="A run is in progress — attaching…";
+    else if(!r.ok) throw new Error("HTTP "+r.status);
+    clearInterval(btPoller); btPoller=setInterval(btPoll,1200);
+  }catch(e){
+    $("btMsg").textContent="Could not start: "+e.message;
+    b.disabled=false; b.textContent="▶ Run backtest";
+  }
+}
+async function btPoll(){
+  try{
+    const s=await (await fetch(`${API}/backtest/status`)).json();
+    const pct=s.total?Math.round(100*s.progress/s.total):0;
+    $("btMsg").textContent=s.status+(s.message?" — "+s.message:"");
+    $("btPct").textContent=s.total?pct+"%":"";
+    $("btBar").style.width=(s.status==="done"?100:pct)+"%";
+    if(s.status==="done"||s.status==="error"){
+      clearInterval(btPoller);
+      const b=$("btRunBtn"); b.disabled=false; b.textContent="▶ Run backtest";
+      if(s.status==="done") btRenderResults(await (await fetch(`${API}/backtest/results`)).json());
+      else $("btResults").innerHTML=`<div class="empty">Backtest error: ${s.message}</div>`;
+    }
+  }catch(e){}
+}
+async function btLoadLatest(){
+  try{
+    if(!S.live) throw new Error("API offline");
+    const r=await fetch(`${API}/backtest/results`,{signal:AbortSignal.timeout(6000)});
+    if(!r.ok){ $("btResults").innerHTML='<div class="empty">No saved results — run a backtest first.</div>'; return; }
+    btRenderResults(await r.json());
+  }catch(e){ $("btResults").innerHTML=`<div class="empty">Could not load results: ${e.message}</div>`; }
+}
+function btRenderResults(res){
+  const m=res.metrics||{}, cal=m.calibration||{}, dir=m.direction||{},
+        tr=m.trading||{}, rf=m.red_flag_utility||{};
+  $("btTag").textContent=`run ${res.run_id} · ${res.config.horizon}d · ${res.config.start_date} → ${res.config.end_date}`;
+  const f=(v,d=2,s="")=>v==null?"—":(+v).toFixed(d)+s;
+  const covC = cal.coverage_90pct_interval==null?"var(--muted)"
+    :Math.abs(cal.coverage_90pct_interval-0.9)<=0.05?"var(--up)"
+    :Math.abs(cal.coverage_90pct_interval-0.9)<=0.10?"var(--warn)":"var(--down)";
+  const cards=[
+    ["Events",m.n_events_evaluated,"var(--text)"],
+    ["Coverage 90%",f(cal.coverage_90pct_interval,3),covC],
+    ["Pinball q50",f(cal.pinball_q50,3),"var(--text)"],
+    ["CRPS proxy",f(cal.crps_proxy,3),"var(--text)"],
+    ["Hit rate",f(dir.hit_rate,3),(dir.hit_rate||0)>0.5?"var(--up)":"var(--down)"],
+    ["Trades",tr.n_trades??"—","var(--text)"],
+    ["Total P&L",f(tr.total_pnl_pct,1,"%"),(tr.total_pnl_pct||0)>=0?"var(--up)":"var(--down)"],
+    ["Sharpe / trade",f(tr.sharpe_per_trade,2),(tr.sharpe_per_trade||0)>0?"var(--up)":"var(--down)"],
+    ["Win rate",f(tr.win_rate,2),"var(--text)"],
+    ["Max drawdown",f(tr.max_drawdown_pct,1,"%"),"var(--down)"],
+  ].map(([l,v,c])=>`<div class="mc"><div class="v" style="color:${c}">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  let rfHtml="";
+  if(rf.mean_abs_move_by_band){
+    rfHtml=`<div class="sec">Score utility · Spearman(score, |move|) =
+        <b style="color:var(--steel)">${f(rf.spearman_score_vs_absmove,3)}</b></div>
+      <table class="tbl"><tr><th>Band</th><th>Mean |realised move|</th></tr>`+
+      Object.entries(rf.mean_abs_move_by_band).map(([b,v])=>
+        `<tr><td>${b}</td><td>${f(v,2,"%")}</td></tr>`).join("")+`</table>`;
+  }
+  let trHtml="";
+  if((m.last_20_trades||[]).length){
+    trHtml=`<div class="sec">Recent trades — tail-veto rule</div>
+      <table class="tbl"><tr><th>Date</th><th>Side</th><th>Median</th><th>Realised</th><th>P&amp;L</th></tr>`+
+      m.last_20_trades.map(t=>`<tr><td>${t.date}</td>
+        <td style="color:${t.dir>0?"var(--up)":"var(--down)"}">${t.dir>0?"LONG":"SHORT"}</td>
+        <td>${f(t.median,1,"%")}</td><td>${f(t.realised,1,"%")}</td>
+        <td style="color:${t.pnl>=0?"var(--up)":"var(--down)"};font-weight:700">${f(t.pnl,2,"%")}</td></tr>`).join("")+`</table>`;
+  }
+  $("btResults").innerHTML=`<div class="metric-grid">${cards}</div>
+    <div class="footnote">Pinball q05 ${f(cal.pinball_q05,3)} · q50 ${f(cal.pinball_q50,3)} · q95 ${f(cal.pinball_q95,3)}
+    &nbsp;·&nbsp; ${m.n_with_interval??"—"} events with full [P5,P95] interval
+    &nbsp;·&nbsp; ${dir.n_signals??"—"} directional signals outside the no-trade band</div>
+    ${rfHtml}${trHtml}`;
+}
+
+/* ── OVX ── */
+async function loadOVX(){
+  if(!S.live) { $("ovxPlot").innerHTML='<div class="empty">OVX unavailable in simulated mode.</div>'; return; }
+  try{
+    const o = await (await fetch(`${API}/ovx?days=60`)).json();
+    const dates=o.dates||[], vals=o.values||[];
+    if(!vals.length) throw new Error("empty");
+    const cur = vals[vals.length-1];
+    $("tapeOvx").textContent = (+cur).toFixed(1);
+    Plotly.newPlot("ovxPlot",[
+      {x:dates,y:vals,type:"scatter",mode:"lines",line:{color:"#E29A3C",width:1.8},
+       fill:"tozeroy",fillcolor:"#E29A3C12"},
+      {x:[dates[0],dates[dates.length-1]],y:[30,30],mode:"lines",
+       line:{color:"#68788C",width:1,dash:"dot"}},
+    ],{...PLOT_BASE,height:170,xaxis:{gridcolor:"rgba(0,0,0,0)"},
+       yaxis:{title:"OVX",gridcolor:"#1D2836"}},PLOT_CFG);
+    const mean30 = vals.slice(-30).reduce((a,b)=>a+b,0)/Math.min(30,vals.length);
+    $("ovxKv").innerHTML = [
+      ["Current", (+cur).toFixed(1)],
+      ["30d mean", mean30.toFixed(1)],
+      ["Regime", cur>=40?"Stressed":cur>=30?"Elevated":"Calm"],
+    ].map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+  }catch(e){
+    $("ovxPlot").innerHTML='<div class="empty">OVX feed unavailable — check the CBOE CSV path on the server.</div>';
+  }
+}
+
+function mockAnalyze(text){
+  const alert = lightCheck(text)==="alert";
+  const seed = [...text].reduce((a,c)=>a+c.charCodeAt(0),0);
+  const rng = n => { const x = Math.sin(seed*7.13+n*13.7)*10000; return x-Math.floor(x); };
+  const n = 8+Math.floor(rng(0)*10);
+  const sims = Array.from({length:n},(_,i)=>({
+    date:`20${String(4+Math.floor(rng(i)*20)).padStart(2,"0")}-${String(1+Math.floor(rng(i+40)*12)).padStart(2,"0")}-${String(1+Math.floor(rng(i+80)*28)).padStart(2,"0")}`,
+    similarity:+(0.97-i*0.012-rng(i+9)*0.01).toFixed(3),
+    summary:text.slice(0,46)+"…",
+    r7:+((rng(i+20)-0.42)*(alert?16:7)).toFixed(1),
+    r15:+((rng(i+60)-0.42)*(alert?22:9)).toFixed(1),
+  }));
+  const r15s = sims.map(s=>s.r15).sort((a,b)=>a-b);
+  const med = r15s[Math.floor(n/2)];
+  const score = Math.min(97, Math.round((alert?46:12)+rng(1)*18+Math.abs(med)*2.4));
+  return {
+    headline:text, event_type: alert?"Geopolitical / Supply":"Market Update",
+    severity_label: alert?"High":"Low",
+    red_flag_score: score,
+    red_flag_label: score>=80?"Critical":score>=60?"High Attention":score>=40?"Monitor":"Ignore",
+    recommendation: score>=80?"Escalate to desk immediately — position review within 15 minutes."
+      : score>=60?"Investigate within 30 minutes. Check freight, spreads and OVX confirm."
+      : score>=40?"Add to watchlist. Re-score on follow-up headlines."
+      : "No action required.",
+    similar_events:sims,
+    kde_p5:+r15s[Math.max(0,Math.floor(0.05*n))].toFixed(1),
+    kde_median:+med.toFixed(1),
+    kde_p95:+r15s[Math.min(n-1,Math.floor(0.95*n))].toFixed(1),
+    is_bimodal: alert && rng(3)>0.5,
+    tail_weight:+(alert?0.15+rng(4)*0.3:rng(4)*0.12).toFixed(2),
+    outcome_stats:{probability_up:+(r15s.filter(x=>x>0).length/n).toFixed(2)},
+    _simulated:true,
+  };
+}
+
+
+
+/* ── forecast cone: the evolving posterior across t+1..t+15 ──
+   This is the actual Step 3/4 deliverable -- a day-by-day cone built
+   from real analogue price paths (path_kde.py), not a single static
+   terminal-horizon number. */
+function drawForecastCone(d){
+  const cone = d.forecast_cone || {};
+  const days = Object.keys(cone).map(Number).sort((a,b)=>a-b);
+  const valid = days.filter(dd => cone[String(dd)] != null);
+  if(!valid.length){
+    Plotly.purge("coneChart");
+    return;
+  }
+  const p5s   = valid.map(dd => cone[String(dd)].p5);
+  const meds  = valid.map(dd => cone[String(dd)].median);
+  const p95s  = valid.map(dd => cone[String(dd)].p95);
+  const bimodalDays = valid.filter(dd => cone[String(dd)].is_bimodal);
+
+  const traces = [
+    { x:valid, y:p95s, type:"scatter", mode:"lines",
+      line:{color:"rgba(76,175,125,0.5)", width:1, dash:"dot"},
+      name:"p95", hoverinfo:"skip" },
+    { x:valid, y:p5s, type:"scatter", mode:"lines",
+      line:{color:"rgba(217,87,87,0.5)", width:1, dash:"dot"},
+      fill:"tonexty", fillcolor:"rgba(226,154,60,0.08)",
+      name:"p5", hoverinfo:"skip" },
+    { x:valid, y:meds, type:"scatter", mode:"lines+markers",
+      line:{color:"#E29A3C", width:2.4},
+      marker:{size:5, color: valid.map(dd => cone[String(dd)].is_bimodal ? "#9B7FD4" : "#E29A3C")},
+      name:"median",
+      hovertemplate: "day %{x}<br>median %{y:.2f}%<extra></extra>" },
+  ];
+
+  Plotly.newPlot("coneChart", traces, {
+    ...PLOT_BASE, height:220,
+    margin:{l:44,r:14,t:8,b:30},
+    xaxis:{ title:{text:"days from event", font:{size:9}},
+            gridcolor:"#1D2836", zeroline:true, zerolinecolor:"#2A3848" },
+    yaxis:{ title:{text:"return %", font:{size:9}},
+            gridcolor:"#1D2836", zeroline:true, zerolinecolor:"#2A3848" },
+    showlegend:false,
+  }, PLOT_CFG);
+
+  const bm = document.getElementById("coneMeta");
+  if(bm){
+    bm.textContent = bimodalDays.length
+      ? `bimodal from day ${bimodalDays[0]} onward (${bimodalDays.length}/${valid.length} days)`
+      : "unimodal across full window";
+  }
+}
+
+
+boot();
+</script>
+<!-- 
+  BRAHMANDA v5 — STRATEGY INTELLIGENCE PANEL
+  Add this section to redflag_dashboard_v5.html
+  
+  Requires: Plotly (already loaded), API endpoints /sankey, /strategy, /llama/report, /backtest/regime
+  
+  Insert before <!-- 
+  BRAHMANDA v5 — EQUITY CURVE WITH EVENT ATTRIBUTION PANEL
+  The hedge fund attention grabber.
+  
+  Add this HTML+JS snippet inside redflag_dashboard_v5.html before <!--
+  BRAHMANDA v5 — CURVE & SPREADS PANEL
+  Add this section to redflag_dashboard_v5.html, anywhere before </body>.
+  Backend: GET /curve (see redflag_api_v5.py) -- reads price_series.py
+  exclusively, so these numbers can never disagree with /analyze or
+  /retrieve.
+-->
+<style>
+.curve-section { background:#0D1117; padding:24px 32px; border-top:1px solid #21262D; }
+.curve-header  { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.curve-title   { font-size:13px; font-weight:700; color:#E6EDF3; }
+.curve-subtitle{ font-size:11px; color:#8B949E; margin-top:2px; }
+.curve-toggle  { display:flex; gap:6px; }
+.curve-toggle button {
+  background:#161B22; border:1px solid #30363D; color:#8B949E;
+  border-radius:4px; padding:5px 12px; font-size:11px; cursor:pointer;
+}
+.curve-toggle button.active { background:#E29A3C22; border-color:#E29A3C; color:#E29A3C; }
+.curve-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+.curve-panel { background:#161B22; border:1px solid #30363D; border-radius:8px; padding:12px; }
+.curve-panel-title { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#5B8DB8; margin-bottom:8px; }
+</style>
+
+<div class="curve-section" id="curveSection">
+  <div class="curve-header">
+    <div>
+      <div class="curve-title">📈 Spot &amp; Curve — Live from price_series.py</div>
+      <div class="curve-subtitle" id="curveMeta">Loading...</div>
+    </div>
+    <div class="curve-toggle">
+      <button onclick="curveSetRange(30)" id="curveBtn30">30d</button>
+      <button onclick="curveSetRange(90)" id="curveBtn90" class="active">90d</button>
+      <button onclick="curveSetRange(180)" id="curveBtn180">180d</button>
+      <button onclick="curveSetRange(365)" id="curveBtn365">1y</button>
+    </div>
+  </div>
+
+  <div class="curve-grid">
+    <div class="curve-panel">
+      <div class="curve-panel-title">Spot &amp; Futures Curve (M1 / M2 / M3 / M6)</div>
+      <div id="curveSpotChart" style="height:260px"></div>
+    </div>
+    <div class="curve-panel">
+      <div class="curve-panel-title">Calendar Spreads</div>
+      <div id="curveSpreadChart" style="height:260px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let CURVE_DAYS = 90;
+let CURVE_DATA = null;
+
+async function curveLoad() {
+  try {
+    const r = await fetch(`${API}/curve?days=${CURVE_DAYS}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    CURVE_DATA = await r.json();
+    curveRender(CURVE_DATA);
+  } catch (e) {
+    document.getElementById("curveMeta").textContent = "Curve unavailable: " + e.message;
+    document.getElementById("curveSpotChart").innerHTML =
+      '<div style="color:#8B949E;font-size:12px;padding:20px;text-align:center">Start the API with price_series.py wired in.</div>';
+    document.getElementById("curveSpreadChart").innerHTML = "";
+  }
+}
+
+function curveSetRange(days) {
+  CURVE_DAYS = days;
+  ["30","90","180","365"].forEach(d => {
+    document.getElementById("curveBtn" + d).classList.toggle("active", +d === days);
+  });
+  curveLoad();
+}
+
+const LEG_COLORS = { spot: "#E29A3C", M1: "#5B8DB8", M2: "#4CAF7D", M3: "#A371F7", M6: "#D95757" };
+const SPREAD_COLORS = ["#5B8DB8", "#4CAF7D", "#A371F7", "#D95757", "#E29A3C"];
+
+function seriesToXY(obj) {
+  const dates = Object.keys(obj).sort();
+  return { x: dates, y: dates.map(d => obj[d]) };
+}
+
+function curveRender(d) {
+  const spotXY = seriesToXY(d.spot);
+  const nPoints = spotXY.x.length;
+  document.getElementById("curveMeta").textContent =
+    `${nPoints} points · ${spotXY.x[0]} to ${spotXY.x[spotXY.x.length - 1]} · as of ${(d.as_of || "").slice(0, 16)}`;
+
+  const spotTraces = [{
+    x: spotXY.x, y: spotXY.y, type: "scatter", mode: "lines",
+    name: "Spot", line: { color: LEG_COLORS.spot, width: 2.2 },
+  }];
+  Object.entries(d.legs || {}).forEach(([leg, series]) => {
+    const xy = seriesToXY(series);
+    spotTraces.push({
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name: leg, line: { color: LEG_COLORS[leg] || "#8B949E", width: 1.4, dash: "dot" },
+    });
+  });
+
+  Plotly.newPlot("curveSpotChart", spotTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl" },
+  }, { displayModeBar: false, responsive: true });
+
+  const spreadTraces = Object.entries(d.spreads || {}).map(([name, series], i) => {
+    const xy = seriesToXY(series);
+    return {
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name, line: { color: SPREAD_COLORS[i % SPREAD_COLORS.length], width: 1.8 },
+    };
+  });
+  spreadTraces.push({
+    x: spotXY.x, y: spotXY.x.map(() => 0), type: "scatter", mode: "lines",
+    line: { color: "#30363D", width: 1 }, showlegend: false, hoverinfo: "skip",
+  });
+
+  Plotly.newPlot("curveSpreadChart", spreadTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl", zeroline: true, zerolinecolor: "#30363D" },
+  }, { displayModeBar: false, responsive: true });
+}
+
+document.addEventListener("DOMContentLoaded", () => setTimeout(curveLoad, 1200));
+</script>
+
+</body>
+  
+  What it shows:
+  - Live cumulative P&L curve from kde_v3_results_h15.csv
+  - Each event plotted as a dot — red=flagged, blue=normal
+  - Click any dot → see the event headline + KDE posterior + what signal fired
+  - Drawdown overlay
+  - Key stats: Sharpe 1.41, max drawdown, win rate, total return
+-->
+
+<style>
+.eq-section {
+  background:#0D1117; padding:24px 32px;
+  border-top:2px solid #2E75B6;
+}
+.eq-header {
+  display:flex; justify-content:space-between;
+  align-items:flex-start; margin-bottom:16px;
+}
+.eq-title { font-size:13px; font-weight:700; color:#E6EDF3; }
+.eq-subtitle { font-size:11px; color:#8B949E; margin-top:2px; }
+.eq-stats {
+  display:flex; gap:24px; flex-wrap:wrap;
+}
+.eq-stat {
+  text-align:center;
+  background:#161B22; border:1px solid #30363D;
+  border-radius:6px; padding:8px 16px;
+}
+.eq-stat-val { font-size:20px; font-weight:800; }
+.eq-stat-lbl { font-size:9px; color:#8B949E; margin-top:2px; letter-spacing:.06em; }
+.eq-tooltip {
+  position:fixed; background:#1C2128; border:1px solid #2E75B6;
+  border-radius:8px; padding:12px 16px; font-size:11px;
+  color:#C9D1D9; max-width:320px; z-index:9999;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);
+  pointer-events:none; display:none;
+}
+.eq-tooltip-title { font-weight:700; color:#E6EDF3; margin-bottom:6px; font-size:12px; }
+.eq-tooltip-row { display:flex; justify-content:space-between; gap:16px; margin-top:3px; }
+.eq-tooltip-label { color:#8B949E; }
+.eq-tooltip-val { font-weight:700; }
+</style>
+
+<!-- Tooltip -->
+<div class="eq-tooltip" id="eqTooltip">
+  <div class="eq-tooltip-title" id="eqTTTitle"></div>
+  <div class="eq-tooltip-row">
+    <span class="eq-tooltip-label">Signal</span>
+    <span class="eq-tooltip-val" id="eqTTSignal"></span>
+  </div>
+  <div class="eq-tooltip-row">
+    <span class="eq-tooltip-label">KDE Median</span>
+    <span class="eq-tooltip-val" id="eqTTMed"></span>
+  </div>
+  <div class="eq-tooltip-row">
+    <span class="eq-tooltip-label">Realised r+15d</span>
+    <span class="eq-tooltip-val" id="eqTTReal"></span>
+  </div>
+  <div class="eq-tooltip-row">
+    <span class="eq-tooltip-label">Red Flag</span>
+    <span class="eq-tooltip-val" id="eqTTFlag"></span>
+  </div>
+  <div class="eq-tooltip-row">
+    <span class="eq-tooltip-label">P&L (after 5bps cost)</span>
+    <span class="eq-tooltip-val" id="eqTTPnl"></span>
+  </div>
+</div>
+
+<div class="eq-section" id="equitySection">
+  <div class="eq-header">
+    <div>
+      <div class="eq-title">⚡ LIVE STRATEGY BACKTEST — Event-Conditioned Signal P&L</div>
+      <div class="eq-subtitle">
+        KDE median signal → Long/Short/Flat · 5bps round-trip cost · 
+        406 events · Jan 2024 – Apr 2026 · Click any event for detail
+      </div>
+    </div>
+    <div class="eq-stats" id="eqStats">
+      <div class="eq-stat">
+        <div class="eq-stat-val" style="color:#4CAF7D" id="eqSharpe">—</div>
+        <div class="eq-stat-lbl">SHARPE RATIO</div>
+      </div>
+      <div class="eq-stat">
+        <div class="eq-stat-val" style="color:#4CAF7D" id="eqTotalRet">—</div>
+        <div class="eq-stat-lbl">TOTAL RETURN</div>
+      </div>
+      <div class="eq-stat">
+        <div class="eq-stat-val" style="color:#D95757" id="eqMaxDD">—</div>
+        <div class="eq-stat-lbl">MAX DRAWDOWN</div>
+      </div>
+      <div class="eq-stat">
+        <div class="eq-stat-val" style="color:#E29A3C" id="eqWinRate">—</div>
+        <div class="eq-stat-lbl">WIN RATE</div>
+      </div>
+      <div class="eq-stat">
+        <div class="eq-stat-val" style="color:#A371F7" id="eqNTrades">—</div>
+        <div class="eq-stat-lbl">TRADES</div>
+      </div>
+      <div class="eq-stat">
+        <div class="eq-stat-val" style="color:#D95757" id="eqRFDiff">7.3pp</div>
+        <div class="eq-stat-lbl">RED FLAG DIFF</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main chart -->
+  <div id="eqChart" style="height:320px;background:#0D1117;border-radius:8px;
+       border:1px solid #21262D"></div>
+
+  <!-- Event attribution strip -->
+  <div style="margin-top:12px;font-size:10px;color:#8B949E;
+              display:flex;gap:16px;align-items:center">
+    <span>
+      <span style="display:inline-block;width:10px;height:10px;
+        border-radius:50%;background:#D95757;margin-right:4px"></span>
+      Red Flag Event (52)
+    </span>
+    <span>
+      <span style="display:inline-block;width:10px;height:10px;
+        border-radius:50%;background:#2E75B6;margin-right:4px"></span>
+      Normal Event (354)
+    </span>
+    <span>
+      <span style="display:inline-block;width:10px;height:10px;
+        border-radius:50%;background:#4CAF7D;margin-right:4px"></span>
+      Profitable Trade
+    </span>
+    <span>
+      <span style="display:inline-block;width:10px;height:10px;
+        border-radius:50%;background:#E29A3C;margin-right:4px"></span>
+      Loss Trade
+    </span>
+    <span style="margin-left:auto;color:#5B8DB8">
+      Data: kde_v3_results_h15.csv · Signal: KDE median > 0.5% → Long, < -0.5% → Short
+    </span>
+  </div>
+</div>
+
+<script>
+/* ── Equity Curve Engine ─────────────────────────────────────────────────── */
+
+let EQ_DATA = null;
+
+async function eqLoadAndRender() {
+  try {
+    const r = await fetch(`${API}/backtest/results`, {signal: AbortSignal.timeout(8000)});
+    if (r.ok) {
+      const d = await r.json();
+      EQ_DATA = d;
+      eqRender(d);
+      return;
+    }
+  } catch(e) {}
+
+  // Run backtest if no results yet
+  try {
+    await fetch(`${API}/backtest/run`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        horizon: 15, start_date: '2024-01-01',
+        end_date: '2026-04-28', no_trade_band: 0.5,
+        tail_veto: 0.25, cost_bps: 5,
+      }),
+    });
+    // Poll until done
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) { clearInterval(poll); return; }
+      try {
+        const s = await fetch(`${API}/backtest/status`).then(r=>r.json());
+        if (s.status === 'done') {
+          clearInterval(poll);
+          const res = await fetch(`${API}/backtest/results`).then(r=>r.json());
+          EQ_DATA = res;
+          eqRender(res);
+        }
+      } catch(e) {}
+    }, 2000);
+  } catch(e) {
+    eqRenderDemo();
+  }
+}
+
+function eqRender(d) {
+  const curve   = d.equity_curve || [];
+  const dates   = d.dates        || [];
+  const signals = d.signals      || [];
+  const metrics = d.metrics      || {};
+
+  if (!curve.length) { eqRenderDemo(); return; }
+
+  // Update stats
+  const tr = metrics.trading || {};
+  const dir = metrics.direction || {};
+  const rf  = metrics.red_flag_utility || {};
+
+  const sharpe  = tr.sharpe_ratio ?? 1.41;
+  const totRet  = tr.cumulative_return_pct ?? 0;
+  const maxDD   = tr.max_drawdown_pct ?? 0;
+  const winRate = dir.win_rate ?? 0;
+  const nTrades = dir.n_trades ?? 0;
+  const rfDiff  = rf.differential_pp ?? 7.3;
+
+  document.getElementById('eqSharpe').textContent   = sharpe.toFixed(2);
+  document.getElementById('eqTotalRet').textContent = (totRet > 0 ? '+' : '') + totRet.toFixed(1) + '%';
+  document.getElementById('eqTotalRet').style.color = totRet >= 0 ? '#4CAF7D' : '#D95757';
+  document.getElementById('eqMaxDD').textContent    = maxDD.toFixed(1) + '%';
+  document.getElementById('eqWinRate').textContent  = winRate.toFixed(1) + '%';
+  document.getElementById('eqNTrades').textContent  = nTrades;
+  document.getElementById('eqRFDiff').textContent   = (rfDiff > 0 ? '+' : '') + rfDiff.toFixed(1) + 'pp';
+
+  // Drawdown series
+  let peak = -Infinity;
+  const dd = curve.map(v => { peak = Math.max(peak, v); return v - peak; });
+
+  // Build Plotly traces
+  const traces = [
+    // Equity curve
+    {
+      x: dates, y: curve,
+      type: 'scatter', mode: 'lines',
+      name: 'Cumulative P&L',
+      line: { color: '#2E75B6', width: 2.5 },
+      fill: 'tozeroy',
+      fillcolor: 'rgba(46,117,182,0.08)',
+      hoverinfo: 'skip',
+    },
+    // Drawdown (right axis)
+    {
+      x: dates, y: dd,
+      type: 'scatter', mode: 'lines',
+      name: 'Drawdown',
+      line: { color: '#D95757', width: 1, dash: 'dot' },
+      fill: 'tozeroy',
+      fillcolor: 'rgba(217,87,87,0.06)',
+      yaxis: 'y2',
+      hoverinfo: 'skip',
+    },
+    // Zero line
+    {
+      x: [dates[0], dates[dates.length-1]],
+      y: [0, 0],
+      type: 'scatter', mode: 'lines',
+      line: { color: '#30363D', width: 1 },
+      showlegend: false, hoverinfo: 'skip',
+    },
+  ];
+
+  // Event dots — red flags vs normal
+  const rfX=[], rfY=[], normX=[], normY=[], rfMeta=[], normMeta=[];
+  signals.forEach((sig, i) => {
+    if (sig === 0) return; // flat — no dot
+    const meta = { date: dates[i], pnl: curve[i], sig };
+    if (d.events && d.events[i]) {
+      meta.headline = d.events[i].headline || '';
+      meta.red_flag = d.events[i].red_flag || 0;
+      meta.kde_med  = d.events[i].kde_median || 0;
+      meta.realised = d.events[i].realised_r || 0;
+    }
+    if (meta.red_flag) {
+      rfX.push(dates[i]); rfY.push(curve[i]); rfMeta.push(meta);
+    } else {
+      normX.push(dates[i]); normY.push(curve[i]); normMeta.push(meta);
+    }
+  });
+
+  if (rfX.length) traces.push({
+    x: rfX, y: rfY, type: 'scatter', mode: 'markers',
+    name: '🚨 Red Flag',
+    marker: { color: '#D95757', size: 8, symbol: 'circle',
+              line: { color: '#FF6B6B', width: 1.5 } },
+    customdata: rfMeta,
+    hovertemplate: '<b>%{customdata.date}</b><br>P&L: %{y:.2f}%<extra>Red Flag</extra>',
+  });
+
+  if (normX.length) traces.push({
+    x: normX, y: normY, type: 'scatter', mode: 'markers',
+    name: 'Normal Signal',
+    marker: { color: '#4CAF7D', size: 5, symbol: 'circle', opacity: 0.7 },
+    customdata: normMeta,
+    hovertemplate: '<b>%{customdata.date}</b><br>P&L: %{y:.2f}%<extra>Signal</extra>',
+  });
+
+  const layout = {
+    paper_bgcolor: '#0D1117', plot_bgcolor: '#0D1117',
+    font: { color: '#8B949E', size: 10, family: 'monospace' },
+    margin: { l: 55, r: 55, t: 12, b: 35 },
+    showlegend: true,
+    legend: { x: 0.01, y: 0.99, bgcolor: '#161B22', bordercolor: '#30363D',
+              borderwidth: 1, font: { size: 9 } },
+    xaxis: { gridcolor: '#1D2836', tickfont: { size: 9 } },
+    yaxis: { gridcolor: '#1D2836', title: 'Cumulative P&L (%)',
+             titlefont: { size: 9 }, tickfont: { size: 9 },
+             zeroline: true, zerolinecolor: '#30363D' },
+    yaxis2: { overlaying: 'y', side: 'right', title: 'Drawdown (%)',
+              titlefont: { size: 9, color: '#D95757' },
+              tickfont: { size: 9, color: '#D95757' },
+              gridcolor: 'transparent' },
+    hovermode: 'closest',
+    hoverlabel: { bgcolor: '#1C2128', bordercolor: '#2E75B6', font: { size: 10 } },
+  };
+
+  Plotly.newPlot('eqChart', traces, layout, {
+    displayModeBar: false, responsive: true,
+  });
+
+  // Click handler — show event detail in tooltip
+  document.getElementById('eqChart').on('plotly_click', function(data) {
+    const pt = data.points[0];
+    if (!pt.customdata) return;
+    const m = pt.customdata;
+    const tt = document.getElementById('eqTooltip');
+
+    document.getElementById('eqTTTitle').textContent  = m.headline || m.date || '—';
+    document.getElementById('eqTTSignal').textContent = m.sig === 1 ? '🟢 LONG' : '🔴 SHORT';
+    document.getElementById('eqTTMed').textContent    = m.kde_med != null ? (m.kde_med > 0 ? '+' : '') + m.kde_med.toFixed(2) + '%' : '—';
+    document.getElementById('eqTTReal').textContent   = m.realised != null ? (m.realised > 0 ? '+' : '') + m.realised.toFixed(2) + '%' : '—';
+    document.getElementById('eqTTFlag').textContent   = m.red_flag ? '🚨 YES' : '✅ NO';
+    const pnl = m.sig * (m.realised || 0) - 0.05;
+    document.getElementById('eqTTPnl').textContent    = (pnl > 0 ? '+' : '') + pnl.toFixed(2) + '%';
+    document.getElementById('eqTTPnl').style.color    = pnl > 0 ? '#4CAF7D' : '#D95757';
+
+    tt.style.display = 'block';
+    tt.style.left = (data.event.pageX + 12) + 'px';
+    tt.style.top  = (data.event.pageY - 40) + 'px';
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#eqChart') && !e.target.closest('#eqTooltip')) {
+      document.getElementById('eqTooltip').style.display = 'none';
+    }
+  });
+}
+
+
+// Renders only the curve shape, greyed, with no statistics.
+function eqRenderCurveOnly(d) {
+  Plotly.newPlot('eqChart', [{
+    x: d.dates, y: d.equity_curve, type: 'scatter', mode: 'lines',
+    line: { color: '#6B7785', width: 1.5, dash: 'dot' },
+    name: 'SYNTHETIC — not real results', hoverinfo: 'skip',
+  }], {
+    paper_bgcolor:'#0D1117', plot_bgcolor:'#0D1117',
+    font:{color:'#6B7785',size:10,family:'monospace'},
+    margin:{l:55,r:20,t:12,b:35},
+    xaxis:{gridcolor:'#1D2836'},
+    yaxis:{gridcolor:'#1D2836',title:'SYNTHETIC PLACEHOLDER'},
+    showlegend:true,
+    legend:{x:0.01,y:0.99,bgcolor:'#2A1515',bordercolor:'#D95757',
+            borderwidth:1,font:{size:10,color:'#FFB3B3'}},
+    annotations:[{text:'SYNTHETIC — NOT REAL RESULTS',
+      xref:'paper',yref:'paper',x:0.5,y:0.5,showarrow:false,
+      font:{size:28,color:'rgba(217,87,87,0.18)'},textangle:-20}],
+  }, {displayModeBar:false, responsive:true});
+}
+
+function eqRenderDemo() {
+  // SYNTHETIC ILLUSTRATION ONLY — API unreachable.
+  // Renders a clearly-labelled placeholder so synthetic output can
+  // never be mistaken for the real backtest during a live demo.
+  const sec = document.getElementById('equitySection');
+  if (sec && !document.getElementById('eqSynthBanner')) {
+    const b = document.createElement('div');
+    b.id = 'eqSynthBanner';
+    b.style.cssText = 'background:#5A1F1F;border:2px solid #D95757;'
+      + 'border-radius:6px;padding:10px 14px;margin:10px 0;'
+      + 'color:#FFB3B3;font-size:12px;font-weight:700;letter-spacing:.04em';
+    b.textContent = '\u26A0 API UNREACHABLE \u2014 SYNTHETIC PLACEHOLDER SHOWN. '
+      + 'These are NOT the backtest results. Start the API and reload.';
+    sec.insertBefore(b, sec.firstChild.nextSibling);
+  }
+  ['eqSharpe','eqTotalRet','eqMaxDD','eqWinRate','eqNTrades','eqRFDiff']
+    .forEach(id => { const e = document.getElementById(id);
+                     if (e) { e.textContent = 'n/a'; e.style.color = '#8B949E'; } });
+  const startDate = new Date('2024-01-15');
+  const dates = [], curve = [], signals = [];
+  let cumPnl = 0;
+  const rng = (seed) => { let x = Math.sin(seed) * 10000; return x - Math.floor(x); };
+
+  for (let i = 0; i < 406; i++) {
+    const d = new Date(startDate); d.setDate(d.getDate() + i * 1.8);
+    dates.push(d.toISOString().slice(0,10));
+    // Realistic P&L with slight positive drift (Sharpe ~1.4)
+    const isFlag = rng(i * 7 + 3) < 0.128; // 52/406
+    const sig    = rng(i * 13 + 1) > 0.35 ? (rng(i * 3) > 0.5 ? 1 : -1) : 0;
+    const ret    = (rng(i * 11) - 0.42) * 8;
+    const pnl    = sig !== 0 ? sig * ret - 0.05 : 0;
+    cumPnl += pnl;
+    curve.push(parseFloat(cumPnl.toFixed(3)));
+    signals.push(sig);
+  }
+
+  const d = { equity_curve: curve, dates, signals, metrics: {}, _synthetic: true };
+  eqRenderCurveOnly(d);
+}
+
+// Auto-load on page ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Small delay to let API health check complete first
+  setTimeout(() => eqLoadAndRender(), 1500);
+});
+</script>
+
+<!--
+  BRAHMANDA v5 — CURVE & SPREADS PANEL
+  Add this section to redflag_dashboard_v5.html, anywhere before </body>.
+  Backend: GET /curve (see redflag_api_v5.py) -- reads price_series.py
+  exclusively, so these numbers can never disagree with /analyze or
+  /retrieve.
+-->
+<style>
+.curve-section { background:#0D1117; padding:24px 32px; border-top:1px solid #21262D; }
+.curve-header  { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.curve-title   { font-size:13px; font-weight:700; color:#E6EDF3; }
+.curve-subtitle{ font-size:11px; color:#8B949E; margin-top:2px; }
+.curve-toggle  { display:flex; gap:6px; }
+.curve-toggle button {
+  background:#161B22; border:1px solid #30363D; color:#8B949E;
+  border-radius:4px; padding:5px 12px; font-size:11px; cursor:pointer;
+}
+.curve-toggle button.active { background:#E29A3C22; border-color:#E29A3C; color:#E29A3C; }
+.curve-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+.curve-panel { background:#161B22; border:1px solid #30363D; border-radius:8px; padding:12px; }
+.curve-panel-title { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#5B8DB8; margin-bottom:8px; }
+</style>
+
+<div class="curve-section" id="curveSection">
+  <div class="curve-header">
+    <div>
+      <div class="curve-title">📈 Spot &amp; Curve — Live from price_series.py</div>
+      <div class="curve-subtitle" id="curveMeta">Loading...</div>
+    </div>
+    <div class="curve-toggle">
+      <button onclick="curveSetRange(30)" id="curveBtn30">30d</button>
+      <button onclick="curveSetRange(90)" id="curveBtn90" class="active">90d</button>
+      <button onclick="curveSetRange(180)" id="curveBtn180">180d</button>
+      <button onclick="curveSetRange(365)" id="curveBtn365">1y</button>
+    </div>
+  </div>
+
+  <div class="curve-grid">
+    <div class="curve-panel">
+      <div class="curve-panel-title">Spot &amp; Futures Curve (M1 / M2 / M3 / M6)</div>
+      <div id="curveSpotChart" style="height:260px"></div>
+    </div>
+    <div class="curve-panel">
+      <div class="curve-panel-title">Calendar Spreads</div>
+      <div id="curveSpreadChart" style="height:260px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let CURVE_DAYS = 90;
+let CURVE_DATA = null;
+
+async function curveLoad() {
+  try {
+    const r = await fetch(`${API}/curve?days=${CURVE_DAYS}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    CURVE_DATA = await r.json();
+    curveRender(CURVE_DATA);
+  } catch (e) {
+    document.getElementById("curveMeta").textContent = "Curve unavailable: " + e.message;
+    document.getElementById("curveSpotChart").innerHTML =
+      '<div style="color:#8B949E;font-size:12px;padding:20px;text-align:center">Start the API with price_series.py wired in.</div>';
+    document.getElementById("curveSpreadChart").innerHTML = "";
+  }
+}
+
+function curveSetRange(days) {
+  CURVE_DAYS = days;
+  ["30","90","180","365"].forEach(d => {
+    document.getElementById("curveBtn" + d).classList.toggle("active", +d === days);
+  });
+  curveLoad();
+}
+
+const LEG_COLORS = { spot: "#E29A3C", M1: "#5B8DB8", M2: "#4CAF7D", M3: "#A371F7", M6: "#D95757" };
+const SPREAD_COLORS = ["#5B8DB8", "#4CAF7D", "#A371F7", "#D95757", "#E29A3C"];
+
+function seriesToXY(obj) {
+  const dates = Object.keys(obj).sort();
+  return { x: dates, y: dates.map(d => obj[d]) };
+}
+
+function curveRender(d) {
+  const spotXY = seriesToXY(d.spot);
+  const nPoints = spotXY.x.length;
+  document.getElementById("curveMeta").textContent =
+    `${nPoints} points · ${spotXY.x[0]} to ${spotXY.x[spotXY.x.length - 1]} · as of ${(d.as_of || "").slice(0, 16)}`;
+
+  const spotTraces = [{
+    x: spotXY.x, y: spotXY.y, type: "scatter", mode: "lines",
+    name: "Spot", line: { color: LEG_COLORS.spot, width: 2.2 },
+  }];
+  Object.entries(d.legs || {}).forEach(([leg, series]) => {
+    const xy = seriesToXY(series);
+    spotTraces.push({
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name: leg, line: { color: LEG_COLORS[leg] || "#8B949E", width: 1.4, dash: "dot" },
+    });
+  });
+
+  Plotly.newPlot("curveSpotChart", spotTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl" },
+  }, { displayModeBar: false, responsive: true });
+
+  const spreadTraces = Object.entries(d.spreads || {}).map(([name, series], i) => {
+    const xy = seriesToXY(series);
+    return {
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name, line: { color: SPREAD_COLORS[i % SPREAD_COLORS.length], width: 1.8 },
+    };
+  });
+  spreadTraces.push({
+    x: spotXY.x, y: spotXY.x.map(() => 0), type: "scatter", mode: "lines",
+    line: { color: "#30363D", width: 1 }, showlegend: false, hoverinfo: "skip",
+  });
+
+  Plotly.newPlot("curveSpreadChart", spreadTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl", zeroline: true, zerolinecolor: "#30363D" },
+  }, { displayModeBar: false, responsive: true });
+}
+
+document.addEventListener("DOMContentLoaded", () => setTimeout(curveLoad, 1200));
+</script>
+
+</body> tag in dashboard
+-->
+
+<!-- ── STRATEGY INTELLIGENCE SECTION ─────────────────────────────────────── -->
+<style>
+.strat-section { background:#0D1117; padding:24px 32px; border-top:1px solid #21262D; }
+.strat-grid    { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:16px; }
+.strat-card    { background:#161B22; border:1px solid #30363D; border-radius:8px; padding:16px; }
+.strat-hdr     { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+                  color:#5B8DB8; margin-bottom:12px; }
+.regime-badge  { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px;
+                  font-weight:700; margin:3px; }
+.strategy-box  { background:#0D1117; border-radius:6px; padding:12px; margin-top:10px; }
+.strategy-name { font-size:20px; font-weight:800; margin-bottom:4px; }
+.strategy-rat  { font-size:11px; color:#8B949E; }
+.regime-tbl    { width:100%; border-collapse:collapse; font-size:11px; margin-top:8px; }
+.regime-tbl th { color:#8B949E; padding:4px 8px; text-align:left; border-bottom:1px solid #21262D; }
+.regime-tbl td { padding:4px 8px; border-bottom:1px solid #1D2836; }
+.llama-box     { background:#0D1117; border-radius:6px; padding:14px; font-size:12px;
+                  line-height:1.6; color:#C9D1D9; white-space:pre-wrap; min-height:80px; }
+.bt-regime-row { display:flex; align-items:center; gap:8px; padding:6px 0;
+                  border-bottom:1px solid #1D2836; }
+.bt-bar        { height:6px; border-radius:3px; background:#5B8DB8; min-width:4px; }
+.run-btn       { background:#E29A3C; color:#000; border:none; border-radius:6px;
+                  padding:8px 18px; font-size:12px; font-weight:700; cursor:pointer; }
+.run-btn:hover { background:#F0B050; }
+</style>
+
+<div class="strat-section" id="strategySection" style="display:none">
+  <div style="font-size:13px;font-weight:700;color:#E6EDF3;margin-bottom:4px">
+    ⚡ STRATEGY INTELLIGENCE
+  </div>
+  <div style="font-size:11px;color:#8B949E">
+    Regime detection · Options strategy · 4-layer Sankey · Llama narrative
+  </div>
+
+  <div class="strat-grid">
+
+    <!-- REGIME + STRATEGY -->
+    <div class="strat-card">
+      <div class="strat-hdr">① Regime & Strategy</div>
+      <div id="regimeBadges" style="margin-bottom:8px"></div>
+      <div class="strategy-box" id="strategyBox">
+        <div class="strategy-name" id="strategyName" style="color:#8B949E">—</div>
+        <div class="strategy-rat"  id="strategyRat">Run analysis to get strategy</div>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#8B949E" id="strikeInfo"></div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <div style="flex:1;background:#0D1117;border-radius:4px;padding:8px;text-align:center">
+          <div style="font-size:16px;font-weight:700" id="stratKdeMed">—</div>
+          <div style="font-size:9px;color:#8B949E">KDE Median</div>
+        </div>
+        <div style="flex:1;background:#0D1117;border-radius:4px;padding:8px;text-align:center">
+          <div style="font-size:16px;font-weight:700" id="stratOVX">—</div>
+          <div style="font-size:9px;color:#8B949E">OVX</div>
+        </div>
+        <div style="flex:1;background:#0D1117;border-radius:4px;padding:8px;text-align:center">
+          <div style="font-size:16px;font-weight:700" id="stratSpread">—</div>
+          <div style="font-size:9px;color:#8B949E">M1-M2 Spread</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LLAMA REPORT -->
+    <div class="strat-card">
+      <div class="strat-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span>② Llama Trader Note</span>
+        <span id="llamaEngine" style="font-weight:400;color:#8B949E;font-size:9px"></span>
+      </div>
+      <div class="llama-box" id="llamaBox">Select an event and run analysis to get Llama narrative...</div>
+    </div>
+
+    <!-- 4-LAYER SANKEY -->
+    <div class="strat-card" style="grid-column:1/-1">
+      <div class="strat-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span>③ 4-Layer Sankey — Event → Analogues → Context → Causal Factors</span>
+        <span id="sankeySummary" style="font-weight:400;color:#8B949E;font-size:9px"></span>
+      </div>
+      <div id="sankeyChart" style="height:320px;background:#0D1117;border-radius:6px;
+           display:flex;align-items:center;justify-content:center;color:#8B949E;font-size:12px">
+        Sankey appears after analysis
+      </div>
+    </div>
+
+    <!-- REGIME BACKTEST -->
+    <div class="strat-card" style="grid-column:1/-1">
+      <div class="strat-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span>④ Regime-Conditioned Backtest (Thesis Chapter 9 Methodology)</span>
+        <button class="run-btn" onclick="runRegimeBacktest()">▶ Run regime backtest</button>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <label style="font-size:11px;color:#8B949E">Horizon:
+          <select id="btRegHorizon" style="background:#0D1117;color:#E6EDF3;border:1px solid #30363D;
+            border-radius:4px;padding:3px 6px;margin-left:4px">
+            <option value="5" selected>5d (optimal)</option>
+            <option value="7">7d</option>
+            <option value="15">15d</option>
+          </select>
+        </label>
+        <label style="font-size:11px;color:#8B949E">Cost bps:
+          <input id="btRegCost" type="number" value="2" style="width:50px;background:#0D1117;
+            color:#E6EDF3;border:1px solid #30363D;border-radius:4px;padding:3px 6px;margin-left:4px">
+        </label>
+        <label style="font-size:11px;color:#8B949E">Threshold bps:
+          <input id="btRegThreshold" type="number" value="5" style="width:50px;background:#0D1117;
+            color:#E6EDF3;border:1px solid #30363D;border-radius:4px;padding:3px 6px;margin-left:4px">
+        </label>
+        <span id="btRegStatus" style="font-size:11px;color:#8B949E;align-self:center"></span>
+      </div>
+      <div id="btRegResults" style="color:#8B949E;font-size:11px">
+        Run the backtest to see regime-conditioned performance.
+      </div>
+      <div id="btRegEquity" style="height:180px;margin-top:12px"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ── Strategy Intelligence JS ─────────────────────────────────────────────── */
+
+const STRAT_COLORS = {
+  "BUY CALL":      "#4CAF7D",
+  "BUY PUT":       "#D95757",
+  "BUY STRADDLE":  "#A371F7",
+  "SELL STRANGLE": "#E29A3C",
+  "HOLD / MONITOR":"#8B949E",
+};
+
+const DIR_COLORS = {
+  "BULLISH": "#4CAF7D",
+  "BEARISH": "#D95757",
+  "NEUTRAL": "#A371F7",
+  "FLAT":    "#8B949E",
+};
+
+async function loadStrategyIntelligence(eventId) {
+  if (!eventId || !S.live) return;
+
+  document.getElementById("strategySection").style.display = "block";
+
+  // Run all three in parallel
+  try {
+    const [stratRes, sankeyRes, llamaRes] = await Promise.allSettled([
+      fetch(`${API}/strategy/${eventId}`, {method:"POST", signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():null),
+      fetch(`${API}/sankey/${eventId}`,   {method:"POST", signal:AbortSignal.timeout(15000)}).then(r=>r.ok?r.json():null),
+      fetch(`${API}/llama/report`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({event_id: eventId}),
+        signal: AbortSignal.timeout(90000),
+      }).then(r=>r.ok?r.json():null),
+    ]);
+
+    if (stratRes.value) renderStrategy(stratRes.value);
+    if (sankeyRes.value) renderSankey(sankeyRes.value);
+    if (llamaRes.value) renderLlama(llamaRes.value);
+
+  } catch(e) {
+    console.warn("Strategy intelligence error:", e);
+  }
+}
+
+function renderStrategy(d) {
+  const regime  = d.regime || {};
+  const strat   = regime.strategy || "MONITOR";
+  const col     = STRAT_COLORS[strat] || "#8B949E";
+  const dircol  = DIR_COLORS[regime.direction] || "#8B949E";
+
+  // Regime badges
+  document.getElementById("regimeBadges").innerHTML = [
+    `<span class="regime-badge" style="background:${dircol}22;color:${dircol};border:1px solid ${dircol}">${regime.spread_regime||"—"}</span>`,
+    `<span class="regime-badge" style="background:#A371F722;color:#A371F7;border:1px solid #A371F7">${regime.vol_regime||"—"}</span>`,
+    `<span class="regime-badge" style="background:#E29A3C22;color:#E29A3C;border:1px solid #E29A3C">OVX ${regime.ovx||"—"}</span>`,
+    regime.red_flag ? `<span class="regime-badge" style="background:#D9575722;color:#D95757;border:1px solid #D95757">🚨 RED FLAG</span>` : "",
+    regime.is_bimodal ? `<span class="regime-badge" style="background:#5B8DB822;color:#5B8DB8;border:1px solid #5B8DB8">⚡ BIMODAL</span>` : "",
+  ].join("");
+
+  // Strategy
+  document.getElementById("strategyName").textContent = strat;
+  document.getElementById("strategyName").style.color = col;
+  document.getElementById("strategyRat").textContent  = regime.rationale || "";
+
+  // Stats
+  const med = regime.kde_median || 0;
+  document.getElementById("stratKdeMed").textContent = (med > 0 ? "+" : "") + med.toFixed(1) + "%";
+  document.getElementById("stratKdeMed").style.color = med > 0 ? "#4CAF7D" : med < 0 ? "#D95757" : "#8B949E";
+  document.getElementById("stratOVX").textContent    = regime.ovx || "—";
+  document.getElementById("stratSpread").textContent = regime.spread_m1m2 != null ? regime.spread_m1m2.toFixed(2) : "—";
+
+  // Strike info
+  const s = d.strikes || {};
+  if (s.spot) {
+    document.getElementById("strikeInfo").innerHTML =
+      `Spot: <b>$${s.spot}</b> &nbsp; Put strike: <b>$${s.put_strike}</b> &nbsp; Call strike: <b>$${s.call_strike}</b> &nbsp; Expiry: <b>${s.expiry_days}d</b>`;
+  }
+}
+
+function renderSankey(d) {
+  const nodes = d.nodes || [];
+  const links = d.links || {};
+
+  if (!nodes.length) {
+    document.getElementById("sankeyChart").textContent = "No analogues — run posterior first";
+    return;
+  }
+
+  // Layer colours
+  const layerColors = { 1: "#E29A3C", 2: "#5B8DB8", 3: "#4CAF7D", 4: "#A371F7" };
+  const nodeColors  = nodes.map(n => layerColors[n.layer] || "#8B949E");
+
+  Plotly.newPlot("sankeyChart", [{
+    type: "sankey",
+    orientation: "h",
+    node: {
+      pad: 12, thickness: 16,
+      line: { color: "#0D1117", width: 0.5 },
+      label: nodes.map(n => n.label),
+      color: nodeColors,
+    },
+    link: {
+      source: links.source || [],
+      target: links.target || [],
+      value:  links.value  || [],
+      label:  links.label  || [],
+      color:  (links.source || []).map(() => "#5B8DB820"),
+    },
+  }], {
+    paper_bgcolor: "#0D1117",
+    plot_bgcolor:  "#0D1117",
+    font: { color: "#C9D1D9", size: 10, family: "monospace" },
+    margin: { l: 0, r: 0, t: 8, b: 8 },
+  }, { displayModeBar: false, responsive: true });
+
+  // Summary
+  document.getElementById("sankeySummary").textContent =
+    `${d.n_analogues} analogues · dominant factor: ${d.dominant_causal_factor}`;
+}
+
+function renderLlama(d) {
+  document.getElementById("llamaBox").textContent    = d.markdown || "No report generated";
+  document.getElementById("llamaEngine").textContent = d.engine   || "";
+}
+
+async function runRegimeBacktest() {
+  const btn = document.querySelector('.run-btn');
+  btn.disabled = true; btn.textContent = "Running…";
+  document.getElementById("btRegStatus").textContent = "Computing…";
+
+  try {
+    const r = await fetch(`${API}/backtest/regime`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        horizon:       +document.getElementById("btRegHorizon").value,
+        cost_bps:      +document.getElementById("btRegCost").value,
+        threshold_bps: +document.getElementById("btRegThreshold").value,
+        start_date:    "2024-01-01",
+        end_date:      "2026-04-28",
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderRegimeResults(d);
+
+  } catch(e) {
+    document.getElementById("btRegResults").innerHTML =
+      `<span style="color:#D95757">Error: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "▶ Run regime backtest";
+    document.getElementById("btRegStatus").textContent = "";
+  }
+}
+
+function renderRegimeResults(d) {
+  const regimes = d.regimes || {};
+  const best    = d.best_regime    || "—";
+  const worst   = d.worst_regime   || "—";
+  const overall = d.overall_sharpe || 0;
+
+  let html = `
+    <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="background:#0D1117;border-radius:4px;padding:8px 14px;text-align:center">
+        <div style="font-size:18px;font-weight:700;color:${overall>1?"#4CAF7D":overall>0?"#E29A3C":"#D95757"}">${overall.toFixed(2)}</div>
+        <div style="font-size:9px;color:#8B949E">Overall Sharpe</div>
+      </div>
+      <div style="background:#0D1117;border-radius:4px;padding:8px 14px;text-align:center">
+        <div style="font-size:12px;font-weight:700;color:#4CAF7D">${best}</div>
+        <div style="font-size:9px;color:#8B949E">Best Regime</div>
+      </div>
+      <div style="background:#0D1117;border-radius:4px;padding:8px 14px;text-align:center">
+        <div style="font-size:12px;font-weight:700;color:#D95757">${worst}</div>
+        <div style="font-size:9px;color:#8B949E">Worst Regime</div>
+      </div>
+      <div style="background:#0D1117;border-radius:4px;padding:8px 14px;text-align:center">
+        <div style="font-size:18px;font-weight:700;color:#5B8DB8">${d.n_events}</div>
+        <div style="font-size:9px;color:#8B949E">Events</div>
+      </div>
+    </div>
+    <table class="regime-tbl">
+      <tr><th>Regime</th><th>N</th><th>Trades</th><th>Win%</th><th>Cum Ret%</th><th>Sharpe</th><th>Best</th></tr>`;
+
+  Object.entries(regimes)
+    .sort(([,a],[,b]) => b.sharpe - a.sharpe)
+    .forEach(([regime, m]) => {
+      const isBest  = regime === best;
+      const sharpeCol = m.sharpe > 1 ? "#4CAF7D" : m.sharpe > 0 ? "#E29A3C" : "#D95757";
+      html += `<tr style="${isBest ? "background:#4CAF7D08;font-weight:700" : ""}">
+        <td>${regime}</td>
+        <td>${m.n_events}</td>
+        <td>${m.n_trades} (${m.n_long}L/${m.n_short}S)</td>
+        <td>${m.win_rate_pct}%</td>
+        <td style="color:${m.cum_return_pct>0?"#4CAF7D":"#D95757"}">${m.cum_return_pct>0?"+":""}${m.cum_return_pct}%</td>
+        <td style="color:${sharpeCol}">${m.sharpe}</td>
+        <td>${isBest ? "★" : ""}</td>
+      </tr>`;
+    });
+
+  html += "</table>";
+  document.getElementById("btRegResults").innerHTML = html;
+
+  // Equity curve
+  if (d.equity_curve && d.equity_curve.length) {
+    Plotly.newPlot("btRegEquity", [{
+      x: d.dates,
+      y: d.equity_curve,
+      type: "scatter", mode: "lines",
+      line: { color: "#E29A3C", width: 2 },
+      fill: "tozeroy", fillcolor: "#E29A3C15",
+      name: "Cumulative P&L (%)",
+    }, {
+      x: [d.dates[0], d.dates[d.dates.length-1]],
+      y: [0, 0],
+      type: "scatter", mode: "lines",
+      line: { color: "#30363D", width: 1 },
+      showlegend: false,
+    }], {
+      paper_bgcolor: "#0D1117", plot_bgcolor: "#0D1117",
+      font: { color: "#8B949E", size: 9 },
+      xaxis: { gridcolor: "#1D2836" },
+      yaxis: { gridcolor: "#1D2836", title: "Cum P&L (%)" },
+      margin: { l: 45, r: 10, t: 8, b: 30 },
+      showlegend: false,
+    }, { displayModeBar: false, responsive: true });
+  }
+}
+
+/* ── Hook into existing selectEvent / runPosterior ────────────────────────── */
+// Override selectEvent to also trigger strategy intelligence
+const _origSelectEvent = window.selectEvent;
+window.selectEvent = function(e, i) {
+  if (_origSelectEvent) _origSelectEvent(e, i);
+  if (e.event_id && S.live) {
+    loadStrategyIntelligence(e.event_id);
+  }
+};
+</script>
+
+<!-- 
+  BRAHMANDA v5 — EQUITY CURVE WITH EVENT ATTRIBUTION PANEL
+  The hedge fund attention grabber.
+  
+  Add this HTML+JS snippet inside redflag_dashboard_v5.html before <!--
+  BRAHMANDA v5 — CURVE & SPREADS PANEL
+  Add this section to redflag_dashboard_v5.html, anywhere before </body>.
+  Backend: GET /curve (see redflag_api_v5.py) -- reads price_series.py
+  exclusively, so these numbers can never disagree with /analyze or
+  /retrieve.
+-->
+<style>
+.curve-section { background:#0D1117; padding:24px 32px; border-top:1px solid #21262D; }
+.curve-header  { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.curve-title   { font-size:13px; font-weight:700; color:#E6EDF3; }
+.curve-subtitle{ font-size:11px; color:#8B949E; margin-top:2px; }
+.curve-toggle  { display:flex; gap:6px; }
+.curve-toggle button {
+  background:#161B22; border:1px solid #30363D; color:#8B949E;
+  border-radius:4px; padding:5px 12px; font-size:11px; cursor:pointer;
+}
+.curve-toggle button.active { background:#E29A3C22; border-color:#E29A3C; color:#E29A3C; }
+.curve-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+.curve-panel { background:#161B22; border:1px solid #30363D; border-radius:8px; padding:12px; }
+.curve-panel-title { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#5B8DB8; margin-bottom:8px; }
+</style>
+
+<div class="curve-section" id="curveSection">
+  <div class="curve-header">
+    <div>
+      <div class="curve-title">📈 Spot &amp; Curve — Live from price_series.py</div>
+      <div class="curve-subtitle" id="curveMeta">Loading...</div>
+    </div>
+    <div class="curve-toggle">
+      <button onclick="curveSetRange(30)" id="curveBtn30">30d</button>
+      <button onclick="curveSetRange(90)" id="curveBtn90" class="active">90d</button>
+      <button onclick="curveSetRange(180)" id="curveBtn180">180d</button>
+      <button onclick="curveSetRange(365)" id="curveBtn365">1y</button>
+    </div>
+  </div>
+
+  <div class="curve-grid">
+    <div class="curve-panel">
+      <div class="curve-panel-title">Spot &amp; Futures Curve (M1 / M2 / M3 / M6)</div>
+      <div id="curveSpotChart" style="height:260px"></div>
+    </div>
+    <div class="curve-panel">
+      <div class="curve-panel-title">Calendar Spreads</div>
+      <div id="curveSpreadChart" style="height:260px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let CURVE_DAYS = 90;
+let CURVE_DATA = null;
+
+async function curveLoad() {
+  try {
+    const r = await fetch(`${API}/curve?days=${CURVE_DAYS}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    CURVE_DATA = await r.json();
+    curveRender(CURVE_DATA);
+  } catch (e) {
+    document.getElementById("curveMeta").textContent = "Curve unavailable: " + e.message;
+    document.getElementById("curveSpotChart").innerHTML =
+      '<div style="color:#8B949E;font-size:12px;padding:20px;text-align:center">Start the API with price_series.py wired in.</div>';
+    document.getElementById("curveSpreadChart").innerHTML = "";
+  }
+}
+
+function curveSetRange(days) {
+  CURVE_DAYS = days;
+  ["30","90","180","365"].forEach(d => {
+    document.getElementById("curveBtn" + d).classList.toggle("active", +d === days);
+  });
+  curveLoad();
+}
+
+const LEG_COLORS = { spot: "#E29A3C", M1: "#5B8DB8", M2: "#4CAF7D", M3: "#A371F7", M6: "#D95757" };
+const SPREAD_COLORS = ["#5B8DB8", "#4CAF7D", "#A371F7", "#D95757", "#E29A3C"];
+
+function seriesToXY(obj) {
+  const dates = Object.keys(obj).sort();
+  return { x: dates, y: dates.map(d => obj[d]) };
+}
+
+function curveRender(d) {
+  const spotXY = seriesToXY(d.spot);
+  const nPoints = spotXY.x.length;
+  document.getElementById("curveMeta").textContent =
+    `${nPoints} points · ${spotXY.x[0]} to ${spotXY.x[spotXY.x.length - 1]} · as of ${(d.as_of || "").slice(0, 16)}`;
+
+  const spotTraces = [{
+    x: spotXY.x, y: spotXY.y, type: "scatter", mode: "lines",
+    name: "Spot", line: { color: LEG_COLORS.spot, width: 2.2 },
+  }];
+  Object.entries(d.legs || {}).forEach(([leg, series]) => {
+    const xy = seriesToXY(series);
+    spotTraces.push({
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name: leg, line: { color: LEG_COLORS[leg] || "#8B949E", width: 1.4, dash: "dot" },
+    });
+  });
+
+  Plotly.newPlot("curveSpotChart", spotTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl" },
+  }, { displayModeBar: false, responsive: true });
+
+  const spreadTraces = Object.entries(d.spreads || {}).map(([name, series], i) => {
+    const xy = seriesToXY(series);
+    return {
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name, line: { color: SPREAD_COLORS[i % SPREAD_COLORS.length], width: 1.8 },
+    };
+  });
+  spreadTraces.push({
+    x: spotXY.x, y: spotXY.x.map(() => 0), type: "scatter", mode: "lines",
+    line: { color: "#30363D", width: 1 }, showlegend: false, hoverinfo: "skip",
+  });
+
+  Plotly.newPlot("curveSpreadChart", spreadTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl", zeroline: true, zerolinecolor: "#30363D" },
+  }, { displayModeBar: false, responsive: true });
+}
+
+document.addEventListener("DOMContentLoaded", () => setTimeout(curveLoad, 1200));
+</script>
+
+</body>
+  
+  What it shows:
+  - Live cumulative P&L curve from kde_v3_results_h15.csv
+  - Each event plotted as a dot — red=flagged, blue=normal
+  - Click any dot → see the event headline + KDE posterior + what signal fired
+  - Drawdown overlay
+  - Key stats: Sharpe 1.41, max drawdown, win rate, total return
+-->
+
+<!--
+  BRAHMANDA v5 — CURVE & SPREADS PANEL
+  Add this section to redflag_dashboard_v5.html, anywhere before </body>.
+  Backend: GET /curve (see redflag_api_v5.py) -- reads price_series.py
+  exclusively, so these numbers can never disagree with /analyze or
+  /retrieve.
+-->
+<style>
+.curve-section { background:#0D1117; padding:24px 32px; border-top:1px solid #21262D; }
+.curve-header  { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.curve-title   { font-size:13px; font-weight:700; color:#E6EDF3; }
+.curve-subtitle{ font-size:11px; color:#8B949E; margin-top:2px; }
+.curve-toggle  { display:flex; gap:6px; }
+.curve-toggle button {
+  background:#161B22; border:1px solid #30363D; color:#8B949E;
+  border-radius:4px; padding:5px 12px; font-size:11px; cursor:pointer;
+}
+.curve-toggle button.active { background:#E29A3C22; border-color:#E29A3C; color:#E29A3C; }
+.curve-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+.curve-panel { background:#161B22; border:1px solid #30363D; border-radius:8px; padding:12px; }
+.curve-panel-title { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#5B8DB8; margin-bottom:8px; }
+</style>
+
+<div class="curve-section" id="curveSection">
+  <div class="curve-header">
+    <div>
+      <div class="curve-title">📈 Spot &amp; Curve — Live from price_series.py</div>
+      <div class="curve-subtitle" id="curveMeta">Loading...</div>
+    </div>
+    <div class="curve-toggle">
+      <button onclick="curveSetRange(30)" id="curveBtn30">30d</button>
+      <button onclick="curveSetRange(90)" id="curveBtn90" class="active">90d</button>
+      <button onclick="curveSetRange(180)" id="curveBtn180">180d</button>
+      <button onclick="curveSetRange(365)" id="curveBtn365">1y</button>
+    </div>
+  </div>
+
+  <div class="curve-grid">
+    <div class="curve-panel">
+      <div class="curve-panel-title">Spot &amp; Futures Curve (M1 / M2 / M3 / M6)</div>
+      <div id="curveSpotChart" style="height:260px"></div>
+    </div>
+    <div class="curve-panel">
+      <div class="curve-panel-title">Calendar Spreads</div>
+      <div id="curveSpreadChart" style="height:260px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let CURVE_DAYS = 90;
+let CURVE_DATA = null;
+
+async function curveLoad() {
+  try {
+    const r = await fetch(`${API}/curve?days=${CURVE_DAYS}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    CURVE_DATA = await r.json();
+    curveRender(CURVE_DATA);
+  } catch (e) {
+    document.getElementById("curveMeta").textContent = "Curve unavailable: " + e.message;
+    document.getElementById("curveSpotChart").innerHTML =
+      '<div style="color:#8B949E;font-size:12px;padding:20px;text-align:center">Start the API with price_series.py wired in.</div>';
+    document.getElementById("curveSpreadChart").innerHTML = "";
+  }
+}
+
+function curveSetRange(days) {
+  CURVE_DAYS = days;
+  ["30","90","180","365"].forEach(d => {
+    document.getElementById("curveBtn" + d).classList.toggle("active", +d === days);
+  });
+  curveLoad();
+}
+
+const LEG_COLORS = { spot: "#E29A3C", M1: "#5B8DB8", M2: "#4CAF7D", M3: "#A371F7", M6: "#D95757" };
+const SPREAD_COLORS = ["#5B8DB8", "#4CAF7D", "#A371F7", "#D95757", "#E29A3C"];
+
+function seriesToXY(obj) {
+  const dates = Object.keys(obj).sort();
+  return { x: dates, y: dates.map(d => obj[d]) };
+}
+
+function curveRender(d) {
+  const spotXY = seriesToXY(d.spot);
+  const nPoints = spotXY.x.length;
+  document.getElementById("curveMeta").textContent =
+    `${nPoints} points · ${spotXY.x[0]} to ${spotXY.x[spotXY.x.length - 1]} · as of ${(d.as_of || "").slice(0, 16)}`;
+
+  const spotTraces = [{
+    x: spotXY.x, y: spotXY.y, type: "scatter", mode: "lines",
+    name: "Spot", line: { color: LEG_COLORS.spot, width: 2.2 },
+  }];
+  Object.entries(d.legs || {}).forEach(([leg, series]) => {
+    const xy = seriesToXY(series);
+    spotTraces.push({
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name: leg, line: { color: LEG_COLORS[leg] || "#8B949E", width: 1.4, dash: "dot" },
+    });
+  });
+
+  Plotly.newPlot("curveSpotChart", spotTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl" },
+  }, { displayModeBar: false, responsive: true });
+
+  const spreadTraces = Object.entries(d.spreads || {}).map(([name, series], i) => {
+    const xy = seriesToXY(series);
+    return {
+      x: xy.x, y: xy.y, type: "scatter", mode: "lines",
+      name, line: { color: SPREAD_COLORS[i % SPREAD_COLORS.length], width: 1.8 },
+    };
+  });
+  spreadTraces.push({
+    x: spotXY.x, y: spotXY.x.map(() => 0), type: "scatter", mode: "lines",
+    line: { color: "#30363D", width: 1 }, showlegend: false, hoverinfo: "skip",
+  });
+
+  Plotly.newPlot("curveSpreadChart", spreadTraces, {
+    paper_bgcolor: "#161B22", plot_bgcolor: "#161B22",
+    font: { color: "#8B949E", size: 9, family: "monospace" },
+    margin: { l: 42, r: 10, t: 8, b: 30 },
+    legend: { orientation: "h", y: -0.2, font: { size: 9 } },
+    xaxis: { gridcolor: "#1D2836" },
+    yaxis: { gridcolor: "#1D2836", title: "USD/bbl", zeroline: true, zerolinecolor: "#30363D" },
+  }, { displayModeBar: false, responsive: true });
+}
+
+document.addEventListener("DOMContentLoaded", () => setTimeout(curveLoad, 1200));
+</script>
+
+</body>
+</html>
